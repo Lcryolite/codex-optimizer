@@ -1,6 +1,6 @@
 {
   "name": "codex-optimizer",
-  "version": "0.2.0+codex.20260820172834",
+  "version": "0.2.0+codex.20260820173840",
   "description": "Automatically rewrite supported shell commands with RTK, compact tool output through Codex hooks, and keep coding responses concise.",
   "author": {
     "name": "Lcryolite",

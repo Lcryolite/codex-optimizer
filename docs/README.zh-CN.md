@@ -74,8 +74,9 @@ codex plugin add codex-optimizer@codex-optimizer
 ```
 
 新开 Codex 会话，执行 `/hooks`，检查并信任三个插件 hook。Codex 要求这一步，是因为 hook
-会运行本地代码。`--dangerously-bypass-hook-trust` 仅适用于已经隔离并审计过的单次自动化
-环境。
+会运行本地代码。hook 启动器会在执行时解析最新的有效安装缓存，因此重新安装更新后，已在
+运行的会话不会继续指向被删除的旧版本目录。`--dangerously-bypass-hook-trust` 仅适用于已
+经隔离并审计过的单次自动化环境。
 
 之后直接提出正常编码任务即可，不需要触发词。`$codex-optimizer` 仍可用于自动范围之外的
 任务。

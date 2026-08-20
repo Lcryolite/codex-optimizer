@@ -84,6 +84,9 @@ codex plugin add codex-optimizer@codex-optimizer
 
 Start a new Codex session, open `/hooks`, inspect the three plugin hooks, and
 trust them. Codex requires this trust step because hooks execute local code.
+The hook launcher resolves the newest valid installed cache at execution time,
+so reinstalling an update does not leave already-running sessions pointing at
+a deleted version directory.
 The one-session automation escape hatch
 `--dangerously-bypass-hook-trust` should be used only in an already isolated,
 audited environment.

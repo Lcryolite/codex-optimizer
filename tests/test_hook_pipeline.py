@@ -30,6 +30,30 @@ class HookManifestContractTests(unittest.TestCase):
         self.assertEqual(hooks["PreToolUse"][0]["matcher"], "Bash")
         self.assertEqual(hooks["PostToolUse"][0]["matcher"], "*")
 
+    def test_launcher_survives_a_deleted_session_cache_root(self) -> None:
+        hooks = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))["hooks"]
+        command = hooks["SessionStart"][0]["hooks"][0]["command"]
+        with tempfile.TemporaryDirectory() as temporary:
+            versions = Path(temporary) / "codex-optimizer"
+            versions.mkdir()
+            (versions / "current").symlink_to(PLUGIN, target_is_directory=True)
+            environment = os.environ.copy()
+            environment["PLUGIN_ROOT"] = str(versions / "deleted-version")
+            environment["PLUGIN_DATA"] = str(Path(temporary) / "data")
+            result = subprocess.run(
+                command,
+                shell=True,
+                input="{}",
+                capture_output=True,
+                text=True,
+                check=False,
+                env=environment,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        response = json.loads(result.stdout)
+        self.assertIn("hooks active", response["systemMessage"])
+
 
 class MetricsTests(unittest.TestCase):
     def test_corrupt_metric_values_cannot_break_recording(self) -> None:

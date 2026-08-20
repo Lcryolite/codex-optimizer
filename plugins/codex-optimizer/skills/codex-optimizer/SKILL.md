@@ -42,10 +42,11 @@ requested `set` or `reset`, apply the printed JSON immediately.
 
 Runtime optimization is hook-backed. `PreToolUse` delegates Bash commands to
 the installed `rtk rewrite` protocol and replaces supported commands before
-execution. `PostToolUse` compacts model-visible tool output. Both hooks emit a
-visible system message whenever they change data; unchanged commands and
-outputs remain silent. The external extension itself is not loaded into
-Codex—the installed `rtk` CLI remains the rewrite source.
+execution. `PostToolUse` preserves the original tool result and adds a
+deterministic compact context view. Both hooks emit a visible system message
+whenever they change data; unchanged commands and outputs remain silent. The
+external extension itself is not loaded into Codex—the installed `rtk` CLI
+remains the rewrite source.
 
 ## Mode selection
 
@@ -146,8 +147,8 @@ approval path.
 ## Automatic output compaction
 
 The `PostToolUse` hook automatically applies all enabled stages when their
-input matches. A stage appears in the visible `Applied:` message only when it
-actually changed the output:
+input matches. A stage appears in the visible `Context stages:` notice only
+when it actually changed the compact context view:
 
 - ANSI Stripping
 - Test Aggregation

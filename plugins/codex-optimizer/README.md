@@ -21,6 +21,8 @@ codex plugin add codex-optimizer@codex-optimizer
 
 Start a new session, use `/hooks` to inspect and trust the plugin hooks, then
 submit normal coding work. No `$codex-optimizer` trigger is required.
+The launcher resolves the newest valid installed cache at execution time, so
+updates do not strand already-running sessions on deleted version paths.
 
 ## Verify
 
