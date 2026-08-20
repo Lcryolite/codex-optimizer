@@ -1,7 +1,7 @@
 {
   "name": "codex-optimizer",
-  "version": "0.1.0+codex.20260820145205",
-  "description": "Codex-native optimizer for terse responses, YAGNI-first implementation, and optional RTK shell guidance.",
+  "version": "0.1.0+codex.20260820150504",
+  "description": "Automatically apply all Codex Optimizer modes to coding tasks: concise responses, minimal implementations, and RTK command/output handling.",
   "author": {
     "name": "Lcryolite",
     "url": "https://github.com/Lcryolite/codex-optimizer"
@@ -21,13 +21,13 @@
   "interface": {
     "displayName": "Codex Optimizer",
     "shortDescription": "Terse output, minimal diffs, optional RTK commands.",
-    "longDescription": "A Codex-native skill that packages Caveman response compression, Ponytail YAGNI guidance, and RTK shell-command conventions.",
+    "longDescription": "An automatically invoked Codex skill for coding tasks. Caveman full, Ponytail full, and RTK command/output optimization are enabled by default.",
     "developerName": "Lcryolite",
     "category": "Productivity",
     "capabilities": [
       "Skills",
       "Shell"
     ],
-    "defaultPrompt": "Use Codex Optimizer for this task with the mode I name."
+    "defaultPrompt": "Automatically apply Caveman full, Ponytail full, and RTK to this coding task."
   }
 }

@@ -1,49 +1,14 @@
 #!/usr/bin/env python3
-"""Safely prefix supported top-level shell commands with ``rtk``.
-
-This is a non-executing helper. It deliberately refuses sudo segments. Pass a
-command as one argument or pipe one command on stdin.
-"""
+"""Preview an RTK rewrite without executing the command."""
 
 from __future__ import annotations
 
 import argparse
+import shutil
+import subprocess
 import sys
 
 
-RTK_COMMANDS = {
-    "git",
-    "gh",
-    "ls",
-    "tree",
-    "grep",
-    "cat",
-    "head",
-    "tail",
-    "tsc",
-    "lint",
-    "eslint",
-    "prettier",
-    "next",
-    "cargo",
-    "rustc",
-    "vitest",
-    "playwright",
-    "jest",
-    "test",
-    "pnpm",
-    "npm",
-    "npx",
-    "yarn",
-    "bun",
-    "docker",
-    "kubectl",
-    "aws",
-    "psql",
-    "wc",
-    "prisma",
-    "dotnet",
-}
 OPERATORS = {"&&", "||", ";", "|"}
 
 
@@ -112,39 +77,31 @@ def sudo_segments(parts: list[str]) -> list[str]:
     return [
         part.strip()
         for part in parts
-        if part.strip() not in OPERATORS and part.strip().startswith("sudo")
+        if part.strip() not in OPERATORS
+        and part.strip().startswith("sudo")
         and (part.strip() == "sudo" or part.strip()[4].isspace())
     ]
 
 
-def rewrite_chain(command: str) -> str:
-    parts = split_chain(command)
-    if parts is None:
+def rewrite_with_rtk(command: str) -> str:
+    """Delegate parsing and rewrite policy to the installed RTK binary."""
+
+    executable = shutil.which("rtk")
+    if executable is None:
         return command
 
-    changed = False
-    rewritten: list[str] = []
-    for part in parts:
-        if part.strip() in OPERATORS:
-            rewritten.append(part)
-            continue
+    try:
+        result = subprocess.run(
+            [executable, "rewrite", command],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return command
 
-        leading_length = len(part) - len(part.lstrip())
-        leading = part[:leading_length]
-        body = part[leading_length:]
-        if not body:
-            rewritten.append(part)
-            continue
-
-        first_word = body.split()[0] if body.split() else ""
-        if first_word == "rtk" or first_word not in RTK_COMMANDS:
-            rewritten.append(part)
-            continue
-
-        changed = True
-        rewritten.append(f"{leading}rtk {body}")
-
-    return "".join(rewritten) if changed else command
+    rewritten = result.stdout.rstrip("\n")
+    return rewritten if rewritten else command
 
 
 def main() -> int:
@@ -168,7 +125,7 @@ def main() -> int:
             print(f"  {segment}", file=sys.stderr)
         return 3
 
-    print(rewrite_chain(command))
+    print(rewrite_with_rtk(command))
     return 0
 
 

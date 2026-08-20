@@ -1,31 +1,49 @@
 ---
 name: codex-optimizer
-description: Use when the user explicitly asks for Codex Optimizer behavior, terse responses, YAGNI-first implementation, or RTK-wrapped shell commands; do not activate for ordinary coding tasks without that request.
+description: Automatically use for coding, debugging, testing, refactoring, repository, and shell tasks to apply all Codex Optimizer modes by default—Caveman, Ponytail, and RTK—without requiring the user to name the skill. Do not activate for non-coding questions unless the user asks.
 ---
 
 # Codex Optimizer for Codex
 
-This skill has three independent modes. Keep them independent:
+This skill automatically loads for coding work. The user does not need to type
+`$codex-optimizer` or name any mode. An explicit `$codex-optimizer` still
+forces the skill when the user wants it for a task outside the normal coding
+scope.
 
-- Caveman controls how the response is written.
-- Ponytail controls how much code is built.
-- RTK controls how supported shell commands are selected and written.
+## Automatic defaults
 
-This skill is instruction-driven. It does not silently intercept every shell
-tool call. When RTK is enabled, write the `rtk` prefix explicitly in the
-command you ask Codex to run.
+- Apply Caveman `full` by default: concise explanations that preserve all
+  technical substance.
+- Apply Ponytail `full` by default: smallest correct implementation with no
+  speculative scope.
+- Apply RTK command and output optimization by default for shell work when the
+  `rtk` binary is available.
+- Respect an explicit level change for the current conversation.
+- If the user says `plain command`, `unfiltered output`, `disable RTK`, or
+  equivalent, use the raw command for the current task or operation.
+- If `rtk` is unavailable, run the raw command and mention the one-time
+  fallback only when it affects the result. Do not repeatedly probe a missing
+  binary in the same task.
+
+This is instruction-driven rather than a process-level hook. Codex writes an
+optimized command before running it; it does not silently intercept an already
+constructed shell call. The Pi extension itself is not loaded into Codex. The
+installed `rtk` CLI is the execution source for command rewriting and output
+compaction.
 
 ## Mode selection
 
-Activate only the mode and level the user requested. If the user says only
-“use Codex Optimizer”, use saved defaults when they explicitly ask for them;
-otherwise leave all modes unchanged and ask for no extra setup.
+All three modes are automatic whenever this skill is active:
 
-Level mappings:
+- `caveman`: defaults to `full`; levels are `off`, `lite`, `full`, `ultra`,
+  `micro`.
+- `ponytail`: defaults to `full`; levels are `off`, `lite`, `full`, `ultra`.
+- `rtk`: defaults to automatic `on`; `off` is a temporary opt-out.
 
-- `caveman`: `off`, `lite`, `full`, `ultra`, `micro`.
-- `ponytail`: `off`, `lite`, `full`, `ultra`.
-- `rtk`: `off` or `on`.
+Do not wait for the user to mention a mode. Treat an explicit `rtk off`,
+`disable RTK`, `caveman off`, `ponytail off`, `normal mode`, or raw-output
+request as a temporary opt-out. Saved values are respected until the user
+changes them.
 
 Treat “stop”, “quit”, and “normal mode” as a request to disable the named
 mode. A level change applies to the current conversation. Do not write a
@@ -38,8 +56,8 @@ When active, preserve all technical substance while removing verbal waste.
 
 - `lite`: professional, tight, no filler; keep normal sentences.
 - `full`: remove most articles and hedging; fragments are acceptable.
-- `ultra`: abbreviate common terms (`DB`, `auth`, `config`, `req`,
-  `res`, `fn`, `impl`) and use arrows for causality.
+- `ultra`: abbreviate common terms (`DB`, `auth`, `config`, `req`, `res`, `fn`,
+  `impl`) and use arrows for causality.
 - `micro`: use the shortest clear explanation that still preserves the answer.
 
 Drop pleasantries, filler, and unsupported hedging. Keep exact code blocks,
@@ -77,42 +95,36 @@ non-trivial logic, leave one runnable check behind; trivial one-liners need no
 test. When the user did not request an explanation, put code first and keep
 the follow-up to at most three short lines.
 
-## RTK mode
+## Automatic RTK behavior
 
-Before using RTK in a conversation, check that the binary exists with
-`rtk --version`. If it is missing, do not invent an RTK invocation: use the
-plain command and mention the one-time fallback.
+When preparing a shell command:
 
-For supported commands, prefix every top-level segment:
+1. Resolve `rtk` once when command optimization is needed. A missing binary is
+   a normal fallback, not a reason to invent an invocation.
+2. Prefer the installed RTK wrapper that matches the command, such as
+   `rtk test`, `rtk git`, `rtk grep`, `rtk rg`, `rtk lint`, `rtk npm`, or
+   `rtk cargo`. Use `rtk --help` when the appropriate wrapper is unclear.
+3. For a compound command, use `rtk rewrite "<raw command>"` as the source of
+   truth for shell parsing, supported commands, bypasses, and partial rewrites.
+   Use a non-empty rewrite result; if it produces no safe rewrite, keep the
+   raw command or split the operation into clear commands.
+4. Do not double-prefix a command already beginning with `rtk`. Preserve
+   operators and quoted text unless the installed rewriter changes them.
+5. Use plain commands when the user needs complete unfiltered output for
+   diagnosis, exact machine-readable data, security review, or a verbatim
+   artifact.
 
-```text
-rtk git status
-rtk git add . && rtk git commit -m "message"
-rtk npm test
-```
+The bundled `rtk_rewrite.py` helper previews a rewrite without executing the
+command. It delegates to `rtk rewrite` when available and leaves the raw
+command unchanged when the binary is missing.
 
-Supported command families:
-
-`git`, `gh`, `ls`, `tree`, `grep`, `cat`, `head`, `tail`,
-`tsc`, `lint`, `eslint`, `prettier`, `next`, `cargo`, `rustc`,
-`vitest`, `playwright`, `jest`, `test`, `pnpm`, `npm`, `npx`,
-`yarn`, `bun`, `docker`, `kubectl`, `aws`, `psql`, `wc`,
-`prisma`, and `dotnet`.
-
-Do not double-prefix a command already beginning with `rtk`. Do not rewrite
-operators or text inside quotes. If a chain is unbalanced or too complex to
-reason about safely, leave it unchanged. The bundled `rtk_rewrite.py` helper
-prints a rewritten command without executing it; use it for complex chains
-instead of reimplementing the parser in prose.
-
-Never send a `sudo` segment through this helper or direct RTK execution. Stop
+Never send a `sudo` segment through the rewriter or direct RTK execution. Stop
 and use the host's approved elevated-operation flow, or ask the user to run it
-manually. When full, unfiltered output is needed for diagnosis or an exact
-machine-readable result, use the plain command even when RTK is enabled.
+manually.
 
 ## Optional persistent defaults
 
-The bundled `codex_config.py` helper stores only this plugin's defaults at
+The bundled `codex_config.py` helper stores this plugin's defaults at
 `~/.codex/codex-optimizer.json`. Use it only after the user asks to save,
 show, or reset defaults:
 
@@ -123,6 +135,5 @@ python3 <skill-root>/scripts/codex_config.py set rtk on
 python3 <skill-root>/scripts/codex_config.py reset
 ```
 
-The effective defaults are Caveman off, Ponytail off, and RTK on when the
-`rtk` binary is available. A saved value does not override a new explicit
-user request for the current conversation.
+The defaults are Caveman full, Ponytail full, and RTK on. A saved value does not
+override a new explicit user request for the current conversation.

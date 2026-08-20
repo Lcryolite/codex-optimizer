@@ -2,16 +2,16 @@
 
 [English README](../README.md)
 
-这是一个可安装的 Codex 插件，用于减少无效解释、保持实现最小化，并在需要时使用
-RTK 压缩命令输出。
+这是一个会自动加载的 Codex 插件：对编码、调试、测试、重构和仓库任务自动减少无效解释、
+保持实现最小化，并使用 RTK 压缩命令输出。
 
 ## 功能
 
 - **Caveman**：压缩回复中的冗余文本，但保留代码、错误、安全边界和用户要求的格式。
 - **Ponytail**：优先标准库、平台能力和已有依赖，只实现最小正确改动。
-- **RTK**：对支持的 shell 命令显式使用 `rtk`，并使用 RTK 提供的紧凑输出。
+- **RTK**：自动对支持的 shell 命令使用 `rtk`，并使用 RTK 提供的紧凑输出。
 
-三个模式互相独立，可以单独启用，也可以同时启用。
+三个模式默认全部开启：Caveman `full`、Ponytail `full`、RTK `on`。
 
 ## 安装
 
@@ -22,12 +22,12 @@ codex plugin marketplace add .
 codex plugin add codex-optimizer@codex-optimizer
 ```
 
-安装后重新开启 Codex 会话，然后显式调用：
+安装后重新开启 Codex 会话即可，不需要输入触发词。以下命令只是可选覆盖：
 
 ```text
-Use $codex-optimizer with caveman full.
+Use $codex-optimizer with caveman micro.
 Use ponytail lite for this implementation.
-Enable RTK for supported shell commands.
+Run this command with plain, unfiltered output.
 ```
 
 ## Token 基准

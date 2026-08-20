@@ -1,7 +1,7 @@
 # Codex Optimizer
 
-Codex plugin for concise responses, minimal implementations, and optional RTK
-command guidance.
+Codex plugin that automatically applies concise responses, minimal
+implementations, and RTK command/output optimization to coding tasks.
 
 [中文文档 / Chinese documentation](docs/README.zh-CN.md)
 
@@ -9,18 +9,18 @@ command guidance.
 
 - **Caveman**: reduce response overhead while preserving code, errors, safety boundaries, and requested formats.
 - **Ponytail**: choose the smallest correct implementation, preferring the standard library, native platform features, and existing dependencies.
-- **RTK**: write supported shell commands with explicit `rtk` wrappers and use compact command output where RTK provides it.
+- **RTK**: automatically write supported shell commands with `rtk` wrappers and use compact command output where RTK provides it.
 
-The modes are independent. You can enable Caveman without Ponytail, Ponytail
-without RTK, or all three together.
+All three modes are enabled automatically for coding tasks: Caveman `full`,
+Ponytail `full`, and RTK `on` when the binary is available.
 
 ## Runtime model
 
 This is an instruction-driven Codex skill:
 
-- Activate it with `$codex-optimizer` or a natural-language request.
-- Caveman and Ponytail affect how Codex responds and implements the task.
-- RTK wrappers are written explicitly; the plugin does not silently intercept every shell call.
+- No explicit `$codex-optimizer` invocation is required for coding tasks; Codex loads the skill automatically.
+- Caveman and Ponytail are active by default at `full` level.
+- RTK is applied automatically to supported shell commands; users can request plain or unfiltered output for an operation.
 - `rtk_rewrite.py` prints a rewritten command and never executes it.
 - The helper refuses `sudo` segments so elevation remains an explicit, approved operation.
 
@@ -35,21 +35,22 @@ codex plugin marketplace add .
 codex plugin add codex-optimizer@codex-optimizer
 ```
 
-Start a new Codex session after installation, then use the skill explicitly:
+Start a new Codex session after installation. No trigger phrase is required;
+these are optional overrides:
 
 ```text
-Use $codex-optimizer with caveman full.
+Use $codex-optimizer with caveman micro.
 Use ponytail lite for this implementation.
-Enable RTK for supported shell commands.
+Run this command with plain, unfiltered output.
 ```
 
 ## Modes
 
 | Mode | Values | Effect |
 | --- | --- | --- |
-| Caveman | `off`, `lite`, `full`, `ultra`, `micro` | Compress explanations without compressing code, exact errors, safety constraints, or requested formats. |
-| Ponytail | `off`, `lite`, `full`, `ultra` | Avoid speculative abstractions and dependencies; keep the smallest viable change. |
-| RTK | `off`, `on` | Prefix supported commands with `rtk`; leave unsupported commands unchanged. |
+| Caveman | `off`, `lite`, `full`, `ultra`, `micro` (default: `full`) | Compress explanations without compressing code, exact errors, safety constraints, or requested formats. |
+| Ponytail | `off`, `lite`, `full`, `ultra` (default: `full`) | Avoid speculative abstractions and dependencies; keep the smallest viable change. |
+| RTK | `on` (default), `off` | Prefix supported commands with `rtk`; leave unsupported commands unchanged. |
 
 ## Token benchmark
 
@@ -172,7 +173,7 @@ and the raw passing command is
 
 ## RTK
 
-Check the binary before enabling RTK:
+RTK is used automatically when the binary is available. Check it with:
 
 ```bash
 rtk --version
@@ -199,7 +200,9 @@ python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py s
 python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py reset
 ```
 
-The config file is `~/.codex/codex-optimizer.json`.
+The config file is `~/.codex/codex-optimizer.json`. Defaults are Caveman
+`full`, Ponytail `full`, and RTK `on`; save overrides only when explicitly
+requested.
 
 ## Layout
 

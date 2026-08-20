@@ -2,15 +2,16 @@
 
 [Chinese documentation](../../docs/README.zh-CN.md)
 
-Codex-native plugin for terse responses, YAGNI-first implementation, and
-optional RTK shell guidance. It contains one skill with three independent modes:
+Codex-native plugin that automatically applies terse responses, YAGNI-first
+implementation, and RTK shell guidance to coding tasks.
 
-The repository root README contains the reproducible Caveman and combined
-RTK+Caveman token benchmark: [benchmark documentation](../../README.md#token-benchmark).
+All three modes are enabled by default: Caveman `full`, Ponytail `full`, and
+RTK `on` when available. The repository root README contains the reproducible
+Caveman and combined RTK+Caveman token benchmark: [benchmark documentation](../../README.md#token-benchmark).
 
 - **Caveman** — terse responses with `lite`, `full`, `ultra`, and `micro` levels.
 - **Ponytail** — smallest correct diff with standard-library and existing-dependency preference.
-- **RTK** — explicit `rtk` prefixes for supported shell commands and safe chain rewriting.
+- **RTK** — automatic `rtk` prefixes for supported shell commands and safe chain rewriting.
 
 ## Install locally
 
@@ -21,9 +22,9 @@ codex plugin marketplace add .
 codex plugin add codex-optimizer@codex-optimizer
 ```
 
-Then start a new Codex CLI session and invoke the skill with `$codex-optimizer`,
-or describe the requested mode in your task. Codex's plugin browser is also
-available with `/plugins`.
+Then start a new Codex CLI session. The skill automatically applies to coding
+tasks; `$codex-optimizer` is optional and can force it for another task.
+Codex's plugin browser is also available with `/plugins`.
 
 If local files change after installation, refresh the cachebuster and reinstall:
 
@@ -34,20 +35,20 @@ codex plugin add codex-optimizer@codex-optimizer
 
 ## Usage
 
-Modes are independent:
+Modes are automatic by default; override them only when needed:
 
 ```text
-Use $codex-optimizer with caveman full.
+Use $codex-optimizer with caveman micro.
 Use ponytail lite for this implementation.
-Enable RTK and use it for supported shell commands.
+Run this command with plain, unfiltered output.
 Stop caveman; answer normally from here.
 ```
 
 | Mode | Values | Purpose |
 | --- | --- | --- |
-| Caveman | `off`, `lite`, `full`, `ultra`, `micro` | Compress explanations while preserving technical substance. |
-| Ponytail | `off`, `lite`, `full`, `ultra` | Prefer standard library, native features, existing dependencies, and the smallest viable change. |
-| RTK | `off`, `on` | Prefix supported commands with `rtk`; leave unsupported commands unchanged. |
+| Caveman | `off`, `lite`, `full`, `ultra`, `micro` (default: `full`) | Compress explanations while preserving technical substance. |
+| Ponytail | `off`, `lite`, `full`, `ultra` (default: `full`) | Prefer standard library, native features, existing dependencies, and the smallest viable change. |
+| RTK | `on` (default), `off` | Prefix supported commands with `rtk`; leave unsupported commands unchanged. |
 
 RTK requires the binary to be available:
 
@@ -67,9 +68,9 @@ python3 skills/codex-optimizer/scripts/codex_config.py set rtk on
 python3 skills/codex-optimizer/scripts/codex_config.py reset
 ```
 
-`rtk_rewrite.py` only prints a transformed command. `codex_config.py` stores
-explicit defaults in `~/.codex/codex-optimizer.json`; it does not execute shell
-commands or change Codex configuration automatically.
+`rtk_rewrite.py` only prints an RTK rewrite (or the raw fallback). `codex_config.py`
+stores explicit defaults in `~/.codex/codex-optimizer.json`; it does not execute
+shell commands or change Codex configuration automatically.
 
 ## Layout
 
