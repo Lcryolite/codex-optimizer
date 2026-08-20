@@ -1,0 +1,15 @@
+{
+  "id": "rtk-caveman-test-run",
+  "description": "Run a passing test suite, then report the result concisely.",
+  "rtk_version_captured": "0.45.0",
+  "before": {
+    "assistant": "The test suite completed successfully. I ran the standard test command and all four tests passed across two test suites. The passing cases cover refreshing an expired token, rejecting a malformed token, returning the current user, and rejecting an unknown user. There were no failures or snapshot changes, so the repository is ready for the next step.",
+    "command": "bash benchmarks/fixtures/passing_suite.sh",
+    "tool_output": "\n> codex-optimizer-demo@1.0.0 test\n> jest --runInBand\n\nPASS src/auth.test.ts\n  ✓ refreshes an expired token (8 ms)\n  ✓ rejects a malformed token (2 ms)\nPASS src/user.test.ts\n  ✓ returns the current user (3 ms)\n  ✓ rejects an unknown user (1 ms)\n\nTest Suites: 2 passed, 2 total\nTests:       4 passed, 4 total\nSnapshots:   0 total\nTime:        1.248 s\nRan all test suites.\n"
+  },
+  "after": {
+    "assistant": "Tests pass: 4/4 in 2 suites; no failures.",
+    "command": "rtk test bash benchmarks/fixtures/passing_suite.sh",
+    "tool_output": "OUTPUT (last 5 lines):\n  Test Suites: 2 passed, 2 total\n  Tests:       4 passed, 4 total\n  Snapshots:   0 total\n  Time:        1.248 s\n  Ran all test suites.\n\n"
+  }
+}

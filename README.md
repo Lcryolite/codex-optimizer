@@ -1,25 +1,32 @@
 # Codex Optimizer
 
-将一套面向编码代理的效率工作流封装为可安装的 Codex 插件。插件提供一个
-`codex-optimizer` skill，包含三个相互独立的模式：
+Codex plugin for concise responses, minimal implementations, and optional RTK
+command guidance.
 
-- **Caveman**：减少解释性文本和 token，支持 `lite`、`full`、`ultra`、`micro`。
-- **Ponytail**：YAGNI 优先，优先标准库、平台能力和已有依赖，保持最小正确改动。
-- **RTK**：对支持的 shell 命令显式使用 `rtk` 前缀，并提供安全的链式命令改写 helper。
+[中文文档 / Chinese documentation](docs/README.zh-CN.md)
 
-## 运行方式
+## Features
 
-Codex skill 通过指令生效，不会静默拦截所有 shell 调用：
+- **Caveman**: reduce response overhead while preserving code, errors, safety boundaries, and requested formats.
+- **Ponytail**: choose the smallest correct implementation, preferring the standard library, native platform features, and existing dependencies.
+- **RTK**: write supported shell commands with explicit `rtk` wrappers and use compact command output where RTK provides it.
 
-- 用 `$codex-optimizer` 或自然语言显式启用 skill。
-- Caveman 和 Ponytail 通过 skill 指令生效。
-- RTK 前缀由 Codex 在生成命令时显式写出。
-- `rtk_rewrite.py` 只输出改写结果，不执行命令。
-- `sudo` 命令会被 helper 拒绝，必须走宿主环境批准的提权流程。
+The modes are independent. You can enable Caveman without Ponytail, Ponytail
+without RTK, or all three together.
 
-## 安装
+## Runtime model
 
-需要 Codex CLI。首次安装：
+This is an instruction-driven Codex skill:
+
+- Activate it with `$codex-optimizer` or a natural-language request.
+- Caveman and Ponytail affect how Codex responds and implements the task.
+- RTK wrappers are written explicitly; the plugin does not silently intercept every shell call.
+- `rtk_rewrite.py` prints a rewritten command and never executes it.
+- The helper refuses `sudo` segments so elevation remains an explicit, approved operation.
+
+## Install
+
+Requires Codex CLI. From a checkout of this repository:
 
 ```bash
 git clone https://github.com/Lcryolite/codex-optimizer.git
@@ -28,7 +35,7 @@ codex plugin marketplace add .
 codex plugin add codex-optimizer@codex-optimizer
 ```
 
-安装后重新开启 Codex CLI 会话，然后运行 `/plugins` 检查插件，或在任务中显式调用：
+Start a new Codex session after installation, then use the skill explicitly:
 
 ```text
 Use $codex-optimizer with caveman full.
@@ -36,67 +43,154 @@ Use ponytail lite for this implementation.
 Enable RTK for supported shell commands.
 ```
 
-## 模式与级别
+## Modes
 
-| 模式 | 可选值 | 作用 |
+| Mode | Values | Effect |
 | --- | --- | --- |
-| Caveman | `off` / `lite` / `full` / `ultra` / `micro` | 压缩解释，保留代码、错误和技术细节。 |
-| Ponytail | `off` / `lite` / `full` / `ultra` | 先检查需求、标准库、平台能力和已有依赖，再写最少代码。 |
-| RTK | `off` / `on` | 对支持的命令使用 `rtk`；不支持的命令保持原样。 |
+| Caveman | `off`, `lite`, `full`, `ultra`, `micro` | Compress explanations without compressing code, exact errors, safety constraints, or requested formats. |
+| Ponytail | `off`, `lite`, `full`, `ultra` | Avoid speculative abstractions and dependencies; keep the smallest viable change. |
+| RTK | `off`, `on` | Prefix supported commands with `rtk`; leave unsupported commands unchanged. |
 
-Caveman 只影响解释文本，不压缩代码、错误消息、安全边界或用户要求的格式。
-Ponytail 不会删除信任边界校验、错误处理、安全性、无障碍要求或明确需求。
+## Token benchmark
 
-## Token 基准
+The repository contains two reproducible measurements:
 
-仓库包含 6 组固定测试数据：[`benchmarks/token_savings.json`](benchmarks/token_savings.json)。
-每组数据提供同一个编码任务的普通版、`lite`、`full`、`ultra` 和 `micro` 回复，脚本使用
-`tiktoken` 的 `o200k_base` 编码统计回复 token 数：
+1. Six response-only fixtures for the Caveman levels.
+2. One end-to-end transcript where Caveman and RTK are enabled together.
+
+The benchmark uses `tiktoken` with `o200k_base` and counts assistant text,
+command text, and tool output separately. It does not count the user prompt,
+tool-call JSON framing, code payloads outside the transcript, or hidden model
+reasoning.
+
+Install the optional benchmark dependency and run both the token count and the
+runtime fixture verification:
 
 ```bash
 python3 -m pip install tiktoken
-python3 benchmarks/token_savings.py
+python3 benchmarks/token_savings.py --verify-runtime
 ```
 
-当前固定样本结果（6 组共 403 个基准 token）：
+The runtime verification requires `rtk` in `PATH`. It executes the checked-in
+fixture and compares both the plain and RTK outputs byte-for-byte with the
+captured transcript.
 
-| Caveman 级别 | 压缩后 token | 节省 token | 节省比例 |
+### Response-only results
+
+Six fixed coding-response fixtures contain 403 baseline tokens in total:
+
+| Caveman level | Compressed tokens | Saved tokens | Saved |
 | --- | ---: | ---: | ---: |
 | `lite` | 246 | 157 | 39.0% |
 | `full` | 150 | 253 | 62.8% |
 | `ultra` | 131 | 272 | 67.5% |
 | `micro` | 117 | 286 | 71.0% |
 
-这些数字只统计回复文本，不包含 prompt、代码、错误原文和 shell/tool 输出；它们是可复现的
-样本基准，不是每次任务的固定承诺。实际节省量取决于语言、任务复杂度、是否需要完整解释和
-用户要求的输出格式。Ponytail 的收益主要体现在减少无必要实现，RTK 的收益主要取决于命令
-输出压缩；两者没有混入上表的 Caveman 回复统计。
+Fixture data: [`benchmarks/token_savings.json`](benchmarks/token_savings.json).
+
+### Combined RTK + Caveman scenario
+
+This fixed scenario runs a passing four-test suite in two suites and reports
+the result. The fixture was captured with RTK `0.45.0` and is verified by the
+command above.
+
+Before compression:
+
+Assistant response:
+
+```text
+The test suite completed successfully. I ran the standard test command and all four tests passed across two test suites. The passing cases cover refreshing an expired token, rejecting a malformed token, returning the current user, and rejecting an unknown user. There were no failures or snapshot changes, so the repository is ready for the next step.
+```
+
+Command:
+
+```bash
+bash benchmarks/fixtures/passing_suite.sh
+```
+
+Tool output:
+
+```text
+> codex-optimizer-demo@1.0.0 test
+> jest --runInBand
+
+PASS src/auth.test.ts
+  ✓ refreshes an expired token (8 ms)
+  ✓ rejects a malformed token (2 ms)
+PASS src/user.test.ts
+  ✓ returns the current user (3 ms)
+  ✓ rejects an unknown user (1 ms)
+
+Test Suites: 2 passed, 2 total
+Tests:       4 passed, 4 total
+Snapshots:   0 total
+Time:        1.248 s
+Ran all test suites.
+```
+
+After enabling both modes:
+
+Assistant response:
+
+```text
+Tests pass: 4/4 in 2 suites; no failures.
+```
+
+Command:
+
+```bash
+rtk test bash benchmarks/fixtures/passing_suite.sh
+```
+
+Tool output:
+
+```text
+OUTPUT (last 5 lines):
+  Test Suites: 2 passed, 2 total
+  Tests:       4 passed, 4 total
+  Snapshots:   0 total
+  Time:        1.248 s
+  Ran all test suites.
+```
+
+Token accounting for the exact transcript:
+
+| Part | Before | After | Difference |
+| --- | ---: | ---: | ---: |
+| Assistant response | 65 | 15 | -50 |
+| Command | 8 | 11 | +3 |
+| Tool output | 118 | 56 | -62 |
+| **Total** | **191** | **82** | **-109 (57.1%)** |
+
+This is a measured fixture, not a universal promise. RTK adds command tokens;
+the gain comes from its output filter. Real savings vary with language, task
+complexity, test-runner output, requested explanation detail, and the installed
+RTK version. The complete fixture is
+[`benchmarks/combined_rtk_caveman.json`](benchmarks/combined_rtk_caveman.json),
+and the raw passing command is
+[`benchmarks/fixtures/passing_suite.sh`](benchmarks/fixtures/passing_suite.sh).
 
 ## RTK
 
-启用前先确认 RTK 可执行：
+Check the binary before enabling RTK:
 
 ```bash
 rtk --version
 ```
 
-示例：
-
-```bash
-rtk git status
-rtk npm test
-```
-
-复杂链式命令可以使用不执行命令的 helper：
+For a safe command-chain preview without execution:
 
 ```bash
 python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/rtk_rewrite.py \
   'git status && npm test'
 ```
 
-## 持久化默认值
+The rewrite helper preserves quoted text, leaves unsupported commands alone,
+and refuses `sudo` segments.
 
-只有用户明确要求保存时才写入 `~/.codex/codex-optimizer.json`：
+## Persistent defaults
+
+Only save defaults when explicitly requested:
 
 ```bash
 python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py show
@@ -105,13 +199,19 @@ python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py s
 python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py reset
 ```
 
-## 目录结构
+The config file is `~/.codex/codex-optimizer.json`.
+
+## Layout
 
 ```text
 .
 ├── .agents/plugins/marketplace.json
-├── benchmarks/token_savings.json
-├── benchmarks/token_savings.py
+├── benchmarks/
+│   ├── combined_rtk_caveman.json
+│   ├── fixtures/passing_suite.sh
+│   ├── token_savings.json
+│   └── token_savings.py
+├── docs/README.zh-CN.md
 ├── plugins/codex-optimizer/
 │   ├── .codex-plugin/plugin.json
 │   ├── skills/codex-optimizer/SKILL.md
@@ -122,16 +222,16 @@ python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py r
 └── README.md
 ```
 
-## 校验
+## Validation
 
 ```bash
 python3 /home/lknife/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py \
   plugins/codex-optimizer
 python3 /home/lknife/.codex/skills/.system/skill-creator/scripts/quick_validate.py \
   plugins/codex-optimizer/skills/codex-optimizer
-python3 benchmarks/token_savings.py
+python3 benchmarks/token_savings.py --verify-runtime
 ```
 
 ## License
 
-MIT，详见 [LICENSE](plugins/codex-optimizer/LICENSE)。
+MIT. See [plugins/codex-optimizer/LICENSE](plugins/codex-optimizer/LICENSE).

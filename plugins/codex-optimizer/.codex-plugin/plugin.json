@@ -1,6 +1,6 @@
 {
   "name": "codex-optimizer",
-  "version": "0.1.0+codex.20260820143436",
+  "version": "0.1.0+codex.20260820145205",
   "description": "Codex-native optimizer for terse responses, YAGNI-first implementation, and optional RTK shell guidance.",
   "author": {
     "name": "Lcryolite",

@@ -1,7 +1,12 @@
 # Codex Optimizer
 
+[Chinese documentation](../../docs/README.zh-CN.md)
+
 Codex-native plugin for terse responses, YAGNI-first implementation, and
 optional RTK shell guidance. It contains one skill with three independent modes:
+
+The repository root README contains the reproducible Caveman and combined
+RTK+Caveman token benchmark: [benchmark documentation](../../README.md#token-benchmark).
 
 - **Caveman** — terse responses with `lite`, `full`, `ultra`, and `micro` levels.
 - **Ponytail** — smallest correct diff with standard-library and existing-dependency preference.
