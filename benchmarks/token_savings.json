@@ -1,0 +1,56 @@
+[
+  {
+    "id": "test-failure",
+    "task": "Explain a unit test failure where the assertion expected 4 but received 3.",
+    "baseline": "That assertion means the test expected the value 4, but the code produced 3. First inspect the fixture and the input used by the test, because an incomplete fixture or an off-by-one expectation is more likely than a framework problem. Then run the focused test with verbose output, compare the actual value with the intended behavior, and update either the implementation or the expectation—whichever is wrong. Do not weaken the assertion just to make the test pass.",
+    "lite": "Cause: the test expected 4, but the code returned 3. Check the fixture and input for an off-by-one error, run the focused test, then fix the implementation or expectation. Keep the assertion strict.",
+    "full": "Expected 4; got 3. Check fixture/input → run focused test → fix code or expectation. Keep assertion.",
+    "ultra": "exp 4, got 3 → inspect fixture/input → run focused test → fix impl/expectation; keep assert.",
+    "micro": "3 != 4: inspect fixture/input, rerun focused test, fix code or expected value."
+  },
+  {
+    "id": "api-auth",
+    "task": "Explain how to debug a 401 response from an API.",
+    "baseline": "A 401 response indicates that the server did not accept the credentials. Verify that the token is present, unexpired, and sent in the Authorization header for the failing request. If the token is valid, inspect the server logs for audience or issuer mismatches before changing client code.",
+    "lite": "A 401 means the server rejected the credentials. Verify the token is present, unexpired, and sent in the Authorization header. If valid, check server logs for an audience or issuer mismatch.",
+    "full": "401 → server rejected credentials. Check token present/unexpired + Authorization header; then inspect audience/issuer logs.",
+    "ultra": "401 → creds rejected → check token + auth hdr + exp → inspect aud/iss logs.",
+    "micro": "401: check token, Authorization header, expiry; then audience/issuer."
+  },
+  {
+    "id": "migration",
+    "task": "Give the safe next steps after a database migration fails halfway through.",
+    "baseline": "Do not immediately rerun the migration. First record the exact error and inspect the migration history and database state. If the migration ran inside a transaction, verify that the transaction was rolled back; otherwise use the project's documented recovery procedure, repair the state with a reviewed change, and rerun only after confirming the database matches the expected starting point.",
+    "lite": "Do not rerun immediately. Save the exact error, inspect migration history and database state, and verify rollback. If no rollback occurred, follow the documented recovery procedure, review the repair, then rerun from the expected starting state.",
+    "full": "Stop. Save error → inspect history/DB → verify rollback. If partial state remains, review recovery/repair; rerun only from expected state.",
+    "ultra": "stop → capture err → inspect history/DB → verify rollback → review repair → rerun from known state.",
+    "micro": "Stop; capture error; inspect DB/rollback; repair via runbook; rerun only from known state."
+  },
+  {
+    "id": "dependency-choice",
+    "task": "Recommend whether to add a dependency for parsing one small configuration value.",
+    "baseline": "For one small configuration value, first check whether the standard library or an existing dependency already handles the format. A new package adds installation, update, and security-maintenance cost, so add it only if the format is genuinely complex or the project already standardizes on that library. Otherwise keep the parser local and cover the edge cases with a focused test.",
+    "lite": "For one small value, check the standard library and existing dependencies first. Add a package only for genuinely complex formats or an existing project standard; otherwise keep a local parser with a focused edge-case test.",
+    "full": "One value → stdlib/existing dep first. Add package only for complex format or project standard. Else local parser + focused test.",
+    "ultra": "1 value → stdlib/existing dep → local parser + edge test; new dep only if format complex/standardized.",
+    "micro": "Use stdlib/existing dep; else local parser + edge test. New package only if complexity justifies it."
+  },
+  {
+    "id": "git-conflict",
+    "task": "Explain the correct order for resolving a merge conflict.",
+    "baseline": "Start by inspecting the conflict and understanding both sides before editing. Resolve each file deliberately, remove the conflict markers, run the relevant tests or checks, and review the final diff. Stage the resolved files only after the checks pass, then continue the merge or rebase according to the operation already in progress.",
+    "lite": "Inspect both sides first. Resolve each file, remove markers, run relevant checks, and review the diff. Stage only after checks pass, then continue the active merge or rebase.",
+    "full": "Inspect both sides → resolve/remove markers → run checks → review diff → stage → continue merge/rebase.",
+    "ultra": "conflict → understand both sides → resolve → check → diff → stage → continue operation.",
+    "micro": "Understand both sides, resolve, test, review diff, stage, continue merge/rebase."
+  },
+  {
+    "id": "performance-regression",
+    "task": "Give a compact debugging plan for a performance regression.",
+    "baseline": "First reproduce the regression with a stable benchmark and compare it with a known-good revision. Profile the slow path to identify where time or memory increased, make one targeted change, and rerun the same benchmark. Keep the change only if the measurement improves without breaking correctness or an important workload.",
+    "lite": "Reproduce with a stable benchmark and compare a known-good revision. Profile the slow path, make one targeted change, and rerun the same benchmark. Keep it only if performance improves without correctness regressions.",
+    "full": "Reproduce + baseline → profile → one targeted change → rerun same benchmark → keep only with measured gain and no correctness regression.",
+    "ultra": "repro + good baseline → profile → 1 change → same bench → keep only measured gain/no regression.",
+    "micro": "Reproduce, baseline, profile, change once, rerun; keep only on measured gain."
+  }
+]

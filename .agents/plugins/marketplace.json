@@ -1,0 +1,20 @@
+{
+  "name": "codex-optimizer",
+  "interface": {
+    "displayName": "Codex Optimizer"
+  },
+  "plugins": [
+    {
+      "name": "codex-optimizer",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex-optimizer"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
