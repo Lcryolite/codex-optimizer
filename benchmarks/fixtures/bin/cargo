@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+set -eu
+
+printf '%s\n' \
+  '   Compiling codex-optimizer-benchmark v0.1.0' \
+  '    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.24s' \
+  '     Running unittests src/lib.rs (target/debug/deps/benchmark-0123456789abcdef)' \
+  '' \
+  'running 20 tests' \
+  'test auth::accepts_valid_access_token ... ok' \
+  'test auth::refreshes_expired_access_token ... ok' \
+  'test auth::rejects_expired_refresh_token ... ok' \
+  'test auth::rejects_malformed_access_token ... ok' \
+  'test auth::rejects_missing_signature ... ok' \
+  'test auth::rejects_unknown_issuer ... ok' \
+  'test auth::rejects_wrong_audience ... ok' \
+  'test auth::rotates_refresh_token ... ok' \
+  'test cache::evicts_expired_entries ... ok' \
+  'test cache::keeps_recent_entries ... ok' \
+  'test user::creates_user ... ok' \
+  'test user::deletes_user ... ok' \
+  'test user::finds_user_by_email ... ok' \
+  'test user::finds_user_by_id ... ok' \
+  'test user::lists_active_users ... ok' \
+  'test user::rejects_duplicate_email ... ok' \
+  'test user::rejects_empty_email ... ok' \
+  'test user::rejects_unknown_user ... ok' \
+  'test user::updates_display_name ... ok' \
+  'test user::updates_password_hash ... ok' \
+  '' \
+  'test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s'

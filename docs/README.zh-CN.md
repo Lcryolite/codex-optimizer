@@ -2,18 +2,69 @@
 
 [English README](../README.md)
 
-这是一个会自动加载的 Codex 插件：对编码、调试、测试、重构和仓库任务自动减少无效解释、
-保持实现最小化，并使用 RTK 压缩命令输出。
+Codex Optimizer 是一个基于真实 Codex hooks 的自动优化插件：由 RTK 改写受支持的 shell
+命令，附加紧凑工具上下文，减少回复冗余，并限制不必要的实现范围。
 
-## 功能
+## “自动”是运行时自动
 
-- **Caveman**：压缩回复中的冗余文本，但保留代码、错误、安全边界和用户要求的格式。
-- **Ponytail**：优先标准库、平台能力和已有依赖，只实现最小正确改动。
-- **RTK**：自动对支持的 shell 命令使用 `rtk`，并使用 RTK 提供的紧凑输出。
+编码、调试、测试、重构、仓库和 shell 任务都不需要手动输入
+`$codex-optimizer`。信任 hooks 后，执行链为：
 
-三个模式默认全部开启：Caveman `full`、Ponytail `full`、RTK `on`。
+```text
+自然 Bash 命令
+  → PreToolUse → rtk rewrite → 改写后的命令
+  → 执行命令
+  → PostToolUse → 确定性紧凑上下文 → 模型继续处理
+```
+
+自动并不等于不可见。只有确实发生变化时才显示证据：
+
+```text
+[codex-optimizer] RTK rewrite: git status → rtk git status
+[codex-optimizer] Context stages: Git Compaction; compact view 4,742 → 900 chars; original result preserved.
+```
+
+会话启动时还会报告 hooks 已激活，并列出全部已开启阶段。不支持的命令或无需压缩的输出
+保持原样，不会伪造阶段提示。
+
+Codex 目前没有“静默替换任意 PostToolUse 结果”的受支持字段。返回
+`continue: false` 虽能替换结果，但会把 hook 标记为 `(stopped)`。本插件明确不再这样做：
+RTK 在 Bash 输出进入 Codex 前完成真实缩减；PostToolUse 保留原始结果并附加紧凑上下文。
+详见官方 [Codex hooks 协议](https://learn.chatgpt.com/docs/hooks#posttooluse)。
+
+## 默认模式
+
+| 模式 | 默认值 | 作用 |
+| --- | --- | --- |
+| Caveman | `full` | 删除回复废话，保留代码、精确错误、安全约束和指定格式。 |
+| Ponytail | `full` | 选择最小正确实现，优先标准库、平台功能和已有依赖。 |
+| RTK | `on` | 通过真实 `PreToolUse` 改写和 `PostToolUse` 输出流水线运行。 |
+
+## 全部输出阶段
+
+只有真正改变紧凑上下文的阶段才会出现在运行时提示中。原始工具结果会保留，因此正常执行
+不会再变成 `(stopped)`。
+
+| 阶段 | 说明 |
+| --- | --- |
+| ANSI Stripping | 删除终端颜色和格式控制码。 |
+| Test Aggregation | 汇总通过、失败、跳过数量，并保留失败细节。 |
+| Build Filtering | 删除常规构建进度，保留错误和警告。 |
+| Git Compaction | 压缩 `git status`、`git log`、`git diff`。 |
+| Linter Aggregation | 汇总诊断和错误/警告数量。 |
+| Search Grouping | 按文件分组 `rg`/`grep` 结果。 |
+| Source Code Filtering | 仅在大型读取本来就需要有损压缩时删除冗余注释和空行；保留 userscript 元数据。 |
+| Smart Truncation | 保留有代表性的首尾上下文，并报告省略行数。 |
+| Anchor-Safe Read Compaction | 识别带锚点的读取格式，保留完整编辑锚点。 |
+| Hard Truncation | 对紧凑上下文强制执行 12,000 字符上限。 |
+
+测试锁定了安全边界：不超过 80 行的读取保持原样，显式 offset/limit 读取保持原样，skill
+文件保持原样；任何可识别的 `sudo`、发布、远程写入和破坏性命令都不会交给 RTK，也不会
+获得自动 `permissionDecision: allow`。
 
 ## 安装
+
+需要 Codex CLI，并确保 `rtk` 在 `PATH` 中：
 
 ```bash
 git clone https://github.com/Lcryolite/codex-optimizer.git
@@ -22,138 +73,24 @@ codex plugin marketplace add .
 codex plugin add codex-optimizer@codex-optimizer
 ```
 
-安装后重新开启 Codex 会话即可，不需要输入触发词。以下命令只是可选覆盖：
+新开 Codex 会话，执行 `/hooks`，检查并信任三个插件 hook。Codex 要求这一步，是因为 hook
+会运行本地代码。`--dangerously-bypass-hook-trust` 仅适用于已经隔离并审计过的单次自动化
+环境。
 
-```text
-Use $codex-optimizer with caveman micro.
-Use ponytail lite for this implementation.
-Run this command with plain, unfiltered output.
-```
+之后直接提出正常编码任务即可，不需要触发词。`$codex-optimizer` 仍可用于自动范围之外的
+任务。
 
-## Token 基准
-
-仓库包含两类可复现测试：
-
-1. 6 组只测试回复文本的 Caveman 样本。
-2. 1 组同时启用 Caveman 和 RTK 的端到端 transcript。
-
-统计使用 `tiktoken` 的 `o200k_base` 编码，分别计算 assistant 文本、命令文本和工具输出。
-不统计用户 prompt、tool-call JSON 外壳、transcript 之外的代码和隐藏推理。
-
-运行方式：
+## 检查是否启动及实际节省
 
 ```bash
-python3 -m pip install tiktoken
-python3 benchmarks/token_savings.py --verify-runtime
+python3 plugins/codex-optimizer/scripts/codex_optimizer.py status
+python3 plugins/codex-optimizer/scripts/codex_optimizer.py stats
 ```
 
-运行时校验需要 `rtk` 在 `PATH` 中。脚本会实际执行普通命令和 RTK 命令，并逐字比较输出。
+`status` 会列出有效模式、十个阶段和累计紧凑上下文差值；该差值不是保证减少的模型输入。
+下面的可复现端到端基准使用真实 tokenizer。
 
-### 只测试回复文本
-
-6 组固定编码任务的基准回复共 403 tokens：
-
-| Caveman 级别 | 压缩后 | 节省 | 比例 |
-| --- | ---: | ---: | ---: |
-| `lite` | 246 | 157 | 39.0% |
-| `full` | 150 | 253 | 62.8% |
-| `ultra` | 131 | 272 | 67.5% |
-| `micro` | 117 | 286 | 71.0% |
-
-原始数据：[benchmarks/token_savings.json](../benchmarks/token_savings.json)。
-
-### Caveman + RTK 同时启用
-
-场景：运行一个包含 4 个测试、分属 2 个 test suite 的成功测试集，然后报告结果。
-该 fixture 使用 RTK `0.45.0` 捕获，并由 `--verify-runtime` 校验。
-
-压缩前：
-
-Assistant 回复：
-
-```text
-The test suite completed successfully. I ran the standard test command and all four tests passed across two test suites. The passing cases cover refreshing an expired token, rejecting a malformed token, returning the current user, and rejecting an unknown user. There were no failures or snapshot changes, so the repository is ready for the next step.
-```
-
-命令：
-
-```bash
-bash benchmarks/fixtures/passing_suite.sh
-```
-
-工具输出：
-
-```text
-> codex-optimizer-demo@1.0.0 test
-> jest --runInBand
-
-PASS src/auth.test.ts
-  ✓ refreshes an expired token (8 ms)
-  ✓ rejects a malformed token (2 ms)
-PASS src/user.test.ts
-  ✓ returns the current user (3 ms)
-  ✓ rejects an unknown user (1 ms)
-
-Test Suites: 2 passed, 2 total
-Tests:       4 passed, 4 total
-Snapshots:   0 total
-Time:        1.248 s
-Ran all test suites.
-```
-
-同时启用两个模式后：
-
-Assistant 回复：
-
-```text
-Tests pass: 4/4 in 2 suites; no failures.
-```
-
-命令：
-
-```bash
-rtk test bash benchmarks/fixtures/passing_suite.sh
-```
-
-工具输出：
-
-```text
-OUTPUT (last 5 lines):
-  Test Suites: 2 passed, 2 total
-  Tests:       4 passed, 4 total
-  Snapshots:   0 total
-  Time:        1.248 s
-  Ran all test suites.
-```
-
-精确 token 统计：
-
-| 部分 | 压缩前 | 压缩后 | 变化 |
-| --- | ---: | ---: | ---: |
-| Assistant 回复 | 65 | 15 | -50 |
-| 命令 | 8 | 11 | +3 |
-| 工具输出 | 118 | 56 | -62 |
-| **总计** | **191** | **82** | **-109（57.1%）** |
-
-这是固定 fixture 的实测结果，不是所有任务的保证。RTK 会增加命令 token，节省主要来自工具
-输出过滤；实际结果会随语言、任务复杂度、测试输出、解释要求和 RTK 版本变化。
-
-完整数据：[benchmarks/combined_rtk_caveman.json](../benchmarks/combined_rtk_caveman.json)。
-
-## RTK 安全辅助工具
-
-```bash
-rtk --version
-python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/rtk_rewrite.py \
-  'git status && npm test'
-```
-
-`rtk_rewrite.py` 只打印改写结果，不执行命令；它保留引号内容，不改写不支持的命令，并拒绝
-包含 `sudo` 的命令链。
-
-## 持久化默认值
-
-只有用户明确要求保存时才写入 `~/.codex/codex-optimizer.json`：
+持久化覆盖只在用户明确要求时写入：
 
 ```bash
 python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py show
@@ -162,16 +99,135 @@ python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py s
 python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py reset
 ```
 
-## 校验
+## 可复现 Token 基准
+
+基准使用 `tiktoken 0.14.0` 和 `o200k_base`。统计范围包含本次操作中所有模型可见文本：
+assistant 回复、命令、RTK 工具输出、PostToolUse 紧凑上下文、改写/阶段提示和上下文头。未统计用户
+prompt、tool-call JSON 外壳、隐藏推理和每会话仅一次的启动提示。fixture 为确定性合成
+数据，因此字节级运行校验不依赖编译器版本或实际耗时。
+
+### 压缩前
+
+Assistant 回复：
+
+```text
+The test suite completed successfully. I ran the full Cargo test command and all twenty tests passed in one suite. The passing cases cover access-token validation, refresh-token rotation, cache expiry, and the complete set of user creation, lookup, update, and rejection paths. There were no failed, ignored, measured, or filtered tests, and the run finished in 0.03 seconds, so the repository is ready for the next step.
+```
+
+命令：
+
+```bash
+cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml
+```
+
+工具输出：
+
+```text
+   Compiling codex-optimizer-benchmark v0.1.0
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.24s
+     Running unittests src/lib.rs (target/debug/deps/benchmark-0123456789abcdef)
+
+running 20 tests
+test auth::accepts_valid_access_token ... ok
+test auth::refreshes_expired_access_token ... ok
+test auth::rejects_expired_refresh_token ... ok
+test auth::rejects_malformed_access_token ... ok
+test auth::rejects_missing_signature ... ok
+test auth::rejects_unknown_issuer ... ok
+test auth::rejects_wrong_audience ... ok
+test auth::rotates_refresh_token ... ok
+test cache::evicts_expired_entries ... ok
+test cache::keeps_recent_entries ... ok
+test user::creates_user ... ok
+test user::deletes_user ... ok
+test user::finds_user_by_email ... ok
+test user::finds_user_by_id ... ok
+test user::lists_active_users ... ok
+test user::rejects_duplicate_email ... ok
+test user::rejects_empty_email ... ok
+test user::rejects_unknown_user ... ok
+test user::updates_display_name ... ok
+test user::updates_password_hash ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+```
+
+### 自动 RTK + PostToolUse + Caveman 后
+
+可见运行证据：
+
+```text
+[codex-optimizer] RTK rewrite: cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml → rtk cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml
+[codex-optimizer] Context stages: Test Aggregation; compact view 39 → 31 chars; original result preserved.
+[codex-optimizer compact context; original tool result preserved]
+Context stages: Test Aggregation
+Compact view: 39 → 31 chars (8 fewer, 21%)
+```
+
+实际执行命令：
+
+```bash
+rtk cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml
+```
+
+RTK 先把原始 1,123 字符输出缩减为：
+
+```text
+cargo test: 20 passed (1 suite, 0.03s)
+```
+
+PostToolUse 保留上述 RTK 结果，并附加以下紧凑上下文：
+
+```text
+Test Results:
+  PASS: 20 passed
+```
+
+Caveman 回复：
+
+```text
+Tests pass: 20/20 in 1 suite; 0 failures.
+```
+
+精确 token 统计：
+
+| 部分 | 压缩前 | 压缩后 | 节省 |
+| --- | ---: | ---: | ---: |
+| Assistant 回复 | 87 | 16 | 71 |
+| 命令 | 15 | 17 | -2 |
+| 工具输出 + 紧凑上下文 | 307 | 25 | 282 |
+| 优化器可见提示 | 0 | 106 | -106 |
+| **总计** | **409** | **164** | **245（59.9%）** |
+
+工具输出路径为：**307 原始 tokens → 16 RTK tokens**，另附加 **9 tokens 的
+PostToolUse 紧凑上下文**。把保留的 RTK 输出和全部可见提示计入后，端到端减少 59.9%。
+这是固定 fixture 的实测证据，不是对所有任务的保证。
+
+复现 token 和字节级运行结果：
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install tiktoken==0.14.0
+.venv/bin/python benchmarks/token_savings.py --verify-runtime
+```
+
+完整数据：
+[`benchmarks/combined_rtk_caveman.json`](../benchmarks/combined_rtk_caveman.json)。
+另有 6 组只测回复的固定样本：Caveman `full` 在 403 tokens 中节省 253 tokens
+（62.8%）。
+
+## 开发校验
 
 ```bash
 python3 /home/lknife/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py \
   plugins/codex-optimizer
 python3 /home/lknife/.codex/skills/.system/skill-creator/scripts/quick_validate.py \
   plugins/codex-optimizer/skills/codex-optimizer
-python3 benchmarks/token_savings.py --verify-runtime
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+.venv/bin/python benchmarks/token_savings.py --verify-runtime
 ```
 
-## License
+## 许可证与致谢
 
-MIT，详见 [plugins/codex-optimizer/LICENSE](../plugins/codex-optimizer/LICENSE)。
+MIT，详见 [LICENSE](../plugins/codex-optimizer/LICENSE) 和
+[NOTICE](../plugins/codex-optimizer/NOTICE.md)。

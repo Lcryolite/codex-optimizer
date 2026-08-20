@@ -1,32 +1,79 @@
 # Codex Optimizer
 
-Codex plugin that automatically applies concise responses, minimal
-implementations, and RTK command/output optimization to coding tasks.
+A hook-backed Codex plugin that automatically rewrites supported shell
+commands through RTK, adds compact tool context, keeps responses concise, and
+avoids unnecessary implementation scope.
 
 [中文文档 / Chinese documentation](docs/README.zh-CN.md)
 
-## Features
+## Automatic means automatic
 
-- **Caveman**: reduce response overhead while preserving code, errors, safety boundaries, and requested formats.
-- **Ponytail**: choose the smallest correct implementation, preferring the standard library, native platform features, and existing dependencies.
-- **RTK**: automatically write supported shell commands with `rtk` wrappers and use compact command output where RTK provides it.
+No `$codex-optimizer` invocation is required for coding, debugging, testing,
+refactoring, repository, or shell tasks. After the hooks are trusted, the
+runtime path is:
 
-All three modes are enabled automatically for coding tasks: Caveman `full`,
-Ponytail `full`, and RTK `on` when the binary is available.
+```text
+natural Bash command
+  → PreToolUse → rtk rewrite → rewritten command
+  → command execution
+  → PostToolUse → deterministic compact context → model-visible continuation
+```
 
-## Runtime model
+The plugin is automatic but not invisible. It emits evidence only when data
+changes:
 
-This is an instruction-driven Codex skill:
+```text
+[codex-optimizer] RTK rewrite: git status → rtk git status
+[codex-optimizer] Context stages: Git Compaction; compact view 4,742 → 900 chars; original result preserved.
+```
 
-- No explicit `$codex-optimizer` invocation is required for coding tasks; Codex loads the skill automatically.
-- Caveman and Ponytail are active by default at `full` level.
-- RTK is applied automatically to supported shell commands; users can request plain or unfiltered output for an operation.
-- `rtk_rewrite.py` prints a rewritten command and never executes it.
-- The helper refuses `sudo` segments so elevation remains an explicit, approved operation.
+At session start it also reports that the hooks are active and lists every
+enabled stage. Unsupported commands and outputs that do not benefit from
+compaction remain unchanged and produce no false stage notice.
+
+Codex currently has no supported PostToolUse field that silently replaces an
+arbitrary tool result. Returning `continue: false` performs replacement but
+marks the hook as `(stopped)`. Codex Optimizer deliberately does not do that:
+RTK performs real output reduction before Bash results reach Codex, while
+PostToolUse preserves the original result and adds a compact context view. See
+the official [Codex hooks protocol](https://learn.chatgpt.com/docs/hooks#posttooluse).
+
+## Modes
+
+All modes are enabled by default:
+
+| Mode | Default | Effect |
+| --- | --- | --- |
+| Caveman | `full` | Removes response filler while preserving code, exact errors, safety constraints, and requested formats. |
+| Ponytail | `full` | Chooses the smallest correct implementation; prefers standard library, platform features, and existing dependencies. |
+| RTK | `on` | Uses a real `PreToolUse` rewrite and `PostToolUse` output pipeline. |
+
+## Output stages
+
+A stage is shown only when it transforms the compact context view. The original
+tool result is preserved so normal execution never becomes `(stopped)`.
+
+| Stage | Description |
+| --- | --- |
+| ANSI Stripping | Removes terminal color and formatting sequences. |
+| Test Aggregation | Summarizes pass, fail, skip counts and preserves failure details. |
+| Build Filtering | Removes routine build progress while retaining errors and warnings. |
+| Git Compaction | Condenses `git status`, `git log`, and `git diff`. |
+| Linter Aggregation | Groups diagnostics and reports error/warning totals. |
+| Search Grouping | Groups `rg`/`grep` matches by file. |
+| Source Code Filtering | Removes redundant comments/blank lines only when a large read already needs lossy compaction; userscript metadata is preserved. |
+| Smart Truncation | Keeps representative head/tail context and reports omitted lines. |
+| Anchor-Safe Read Compaction | Recognizes anchored read formats and keeps complete edit anchors. |
+| Hard Truncation | Enforces the compact-context 12,000-character ceiling. |
+
+Safety invariants are tested: reads of 80 lines or fewer remain exact,
+explicit offset/limit reads remain exact, skill files remain exact, and
+recognizable `sudo`, publish, remote-write, and destructive commands never
+reach RTK or receive automatic `permissionDecision: allow`.
 
 ## Install
 
-Requires Codex CLI. From a checkout of this repository:
+Requirements: Codex CLI and an `rtk` binary in `PATH`.
 
 ```bash
 git clone https://github.com/Lcryolite/codex-optimizer.git
@@ -35,163 +82,30 @@ codex plugin marketplace add .
 codex plugin add codex-optimizer@codex-optimizer
 ```
 
-Start a new Codex session after installation. No trigger phrase is required;
-these are optional overrides:
+Start a new Codex session, open `/hooks`, inspect the three plugin hooks, and
+trust them. Codex requires this trust step because hooks execute local code.
+The one-session automation escape hatch
+`--dangerously-bypass-hook-trust` should be used only in an already isolated,
+audited environment.
 
-```text
-Use $codex-optimizer with caveman micro.
-Use ponytail lite for this implementation.
-Run this command with plain, unfiltered output.
-```
+Then ask for normal coding work—no trigger phrase is needed. An explicit
+`$codex-optimizer` can still force the skill outside its automatic scope.
 
-## Modes
+## Verify activation and savings
 
-| Mode | Values | Effect |
-| --- | --- | --- |
-| Caveman | `off`, `lite`, `full`, `ultra`, `micro` (default: `full`) | Compress explanations without compressing code, exact errors, safety constraints, or requested formats. |
-| Ponytail | `off`, `lite`, `full`, `ultra` (default: `full`) | Avoid speculative abstractions and dependencies; keep the smallest viable change. |
-| RTK | `on` (default), `off` | Prefix supported commands with `rtk`; leave unsupported commands unchanged. |
-
-## Token benchmark
-
-The repository contains two reproducible measurements:
-
-1. Six response-only fixtures for the Caveman levels.
-2. One end-to-end transcript where Caveman and RTK are enabled together.
-
-The benchmark uses `tiktoken` with `o200k_base` and counts assistant text,
-command text, and tool output separately. It does not count the user prompt,
-tool-call JSON framing, code payloads outside the transcript, or hidden model
-reasoning.
-
-Install the optional benchmark dependency and run both the token count and the
-runtime fixture verification:
+The status command lists all effective modes, all ten stages, and cumulative
+compact-context deltas:
 
 ```bash
-python3 -m pip install tiktoken
-python3 benchmarks/token_savings.py --verify-runtime
+python3 plugins/codex-optimizer/scripts/codex_optimizer.py status
+python3 plugins/codex-optimizer/scripts/codex_optimizer.py stats
 ```
 
-The runtime verification requires `rtk` in `PATH`. It executes the checked-in
-fixture and compares both the plain and RTK outputs byte-for-byte with the
-captured transcript.
+Metrics are written under Codex's per-plugin data directory. They describe
+compact-context size differences, not guaranteed model-input savings. The
+reproducible end-to-end benchmark below uses an actual tokenizer.
 
-### Response-only results
-
-Six fixed coding-response fixtures contain 403 baseline tokens in total:
-
-| Caveman level | Compressed tokens | Saved tokens | Saved |
-| --- | ---: | ---: | ---: |
-| `lite` | 246 | 157 | 39.0% |
-| `full` | 150 | 253 | 62.8% |
-| `ultra` | 131 | 272 | 67.5% |
-| `micro` | 117 | 286 | 71.0% |
-
-Fixture data: [`benchmarks/token_savings.json`](benchmarks/token_savings.json).
-
-### Combined RTK + Caveman scenario
-
-This fixed scenario runs a passing four-test suite in two suites and reports
-the result. The fixture was captured with RTK `0.45.0` and is verified by the
-command above.
-
-Before compression:
-
-Assistant response:
-
-```text
-The test suite completed successfully. I ran the standard test command and all four tests passed across two test suites. The passing cases cover refreshing an expired token, rejecting a malformed token, returning the current user, and rejecting an unknown user. There were no failures or snapshot changes, so the repository is ready for the next step.
-```
-
-Command:
-
-```bash
-bash benchmarks/fixtures/passing_suite.sh
-```
-
-Tool output:
-
-```text
-> codex-optimizer-demo@1.0.0 test
-> jest --runInBand
-
-PASS src/auth.test.ts
-  ✓ refreshes an expired token (8 ms)
-  ✓ rejects a malformed token (2 ms)
-PASS src/user.test.ts
-  ✓ returns the current user (3 ms)
-  ✓ rejects an unknown user (1 ms)
-
-Test Suites: 2 passed, 2 total
-Tests:       4 passed, 4 total
-Snapshots:   0 total
-Time:        1.248 s
-Ran all test suites.
-```
-
-After enabling both modes:
-
-Assistant response:
-
-```text
-Tests pass: 4/4 in 2 suites; no failures.
-```
-
-Command:
-
-```bash
-rtk test bash benchmarks/fixtures/passing_suite.sh
-```
-
-Tool output:
-
-```text
-OUTPUT (last 5 lines):
-  Test Suites: 2 passed, 2 total
-  Tests:       4 passed, 4 total
-  Snapshots:   0 total
-  Time:        1.248 s
-  Ran all test suites.
-```
-
-Token accounting for the exact transcript:
-
-| Part | Before | After | Difference |
-| --- | ---: | ---: | ---: |
-| Assistant response | 65 | 15 | -50 |
-| Command | 8 | 11 | +3 |
-| Tool output | 118 | 56 | -62 |
-| **Total** | **191** | **82** | **-109 (57.1%)** |
-
-This is a measured fixture, not a universal promise. RTK adds command tokens;
-the gain comes from its output filter. Real savings vary with language, task
-complexity, test-runner output, requested explanation detail, and the installed
-RTK version. The complete fixture is
-[`benchmarks/combined_rtk_caveman.json`](benchmarks/combined_rtk_caveman.json),
-and the raw passing command is
-[`benchmarks/fixtures/passing_suite.sh`](benchmarks/fixtures/passing_suite.sh).
-
-## RTK
-
-RTK is used automatically when the binary is available. Check it with:
-
-```bash
-rtk --version
-```
-
-For a safe command-chain preview without execution:
-
-```bash
-python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/rtk_rewrite.py \
-  'git status && npm test'
-```
-
-The rewrite helper preserves quoted text, leaves unsupported commands alone,
-and refuses `sudo` segments.
-
-## Persistent defaults
-
-Only save defaults when explicitly requested:
+Persistent mode overrides are opt-in:
 
 ```bash
 python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py show
@@ -200,41 +114,141 @@ python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py s
 python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py reset
 ```
 
-The config file is `~/.codex/codex-optimizer.json`. Defaults are Caveman
-`full`, Ponytail `full`, and RTK `on`; save overrides only when explicitly
-requested.
+## Reproducible token benchmark
 
-## Layout
+The benchmark uses `tiktoken 0.14.0` with `o200k_base`. It counts all
+model-visible text for the measured operation: assistant response, command,
+RTK tool output, PostToolUse compact context, rewrite/stage notices, and context
+header. It excludes the user prompt, tool-call JSON framing, hidden reasoning,
+and the once-per-session activation notice. This is a deterministic synthetic
+fixture so byte-for-byte runtime verification does not depend on compiler
+versions or timing.
+
+### Before optimization
+
+Assistant response:
 
 ```text
-.
-├── .agents/plugins/marketplace.json
-├── benchmarks/
-│   ├── combined_rtk_caveman.json
-│   ├── fixtures/passing_suite.sh
-│   ├── token_savings.json
-│   └── token_savings.py
-├── docs/README.zh-CN.md
-├── plugins/codex-optimizer/
-│   ├── .codex-plugin/plugin.json
-│   ├── skills/codex-optimizer/SKILL.md
-│   ├── skills/codex-optimizer/scripts/codex_config.py
-│   ├── skills/codex-optimizer/scripts/rtk_rewrite.py
-│   ├── LICENSE
-│   └── README.md
-└── README.md
+The test suite completed successfully. I ran the full Cargo test command and all twenty tests passed in one suite. The passing cases cover access-token validation, refresh-token rotation, cache expiry, and the complete set of user creation, lookup, update, and rejection paths. There were no failed, ignored, measured, or filtered tests, and the run finished in 0.03 seconds, so the repository is ready for the next step.
 ```
 
-## Validation
+Command:
+
+```bash
+cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml
+```
+
+Tool output:
+
+```text
+   Compiling codex-optimizer-benchmark v0.1.0
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.24s
+     Running unittests src/lib.rs (target/debug/deps/benchmark-0123456789abcdef)
+
+running 20 tests
+test auth::accepts_valid_access_token ... ok
+test auth::refreshes_expired_access_token ... ok
+test auth::rejects_expired_refresh_token ... ok
+test auth::rejects_malformed_access_token ... ok
+test auth::rejects_missing_signature ... ok
+test auth::rejects_unknown_issuer ... ok
+test auth::rejects_wrong_audience ... ok
+test auth::rotates_refresh_token ... ok
+test cache::evicts_expired_entries ... ok
+test cache::keeps_recent_entries ... ok
+test user::creates_user ... ok
+test user::deletes_user ... ok
+test user::finds_user_by_email ... ok
+test user::finds_user_by_id ... ok
+test user::lists_active_users ... ok
+test user::rejects_duplicate_email ... ok
+test user::rejects_empty_email ... ok
+test user::rejects_unknown_user ... ok
+test user::updates_display_name ... ok
+test user::updates_password_hash ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+```
+
+### After automatic RTK + PostToolUse + Caveman
+
+Visible optimizer evidence:
+
+```text
+[codex-optimizer] RTK rewrite: cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml → rtk cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml
+[codex-optimizer] Context stages: Test Aggregation; compact view 39 → 31 chars; original result preserved.
+[codex-optimizer compact context; original tool result preserved]
+Context stages: Test Aggregation
+Compact view: 39 → 31 chars (8 fewer, 21%)
+```
+
+Executed command:
+
+```bash
+rtk cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml
+```
+
+RTK first reduces the raw 1,123-character output to:
+
+```text
+cargo test: 20 passed (1 suite, 0.03s)
+```
+
+PostToolUse keeps that RTK result and adds this compact context:
+
+```text
+Test Results:
+  PASS: 20 passed
+```
+
+Caveman response:
+
+```text
+Tests pass: 20/20 in 1 suite; 0 failures.
+```
+
+Exact token accounting:
+
+| Part | Before | After | Saved |
+| --- | ---: | ---: | ---: |
+| Assistant response | 87 | 16 | 71 |
+| Command | 15 | 17 | -2 |
+| Tool output + compact context | 307 | 25 | 282 |
+| Optimizer notices | 0 | 106 | -106 |
+| **Total** | **409** | **164** | **245 (59.9%)** |
+
+Tool-output path: **307 raw tokens → 16 RTK tokens**, plus **9 tokens of
+PostToolUse compact context**. Including preserved RTK output and every visible
+notice makes the end-to-end result 59.9% smaller. This measured fixture is
+evidence, not a universal promise; savings vary with command, output, and
+response style.
+
+Reproduce both token counts and byte-for-byte runtime behavior:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install tiktoken==0.14.0
+.venv/bin/python benchmarks/token_savings.py --verify-runtime
+```
+
+The fixture data is in
+[`benchmarks/combined_rtk_caveman.json`](benchmarks/combined_rtk_caveman.json).
+Six response-only cases remain in
+[`benchmarks/token_savings.json`](benchmarks/token_savings.json): Caveman
+`full` saves 253 of 403 tokens (62.8%) on that fixed corpus.
+
+## Development validation
 
 ```bash
 python3 /home/lknife/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py \
   plugins/codex-optimizer
 python3 /home/lknife/.codex/skills/.system/skill-creator/scripts/quick_validate.py \
   plugins/codex-optimizer/skills/codex-optimizer
-python3 benchmarks/token_savings.py --verify-runtime
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+.venv/bin/python benchmarks/token_savings.py --verify-runtime
 ```
 
-## License
+## License and attribution
 
-MIT. See [plugins/codex-optimizer/LICENSE](plugins/codex-optimizer/LICENSE).
+MIT. See [LICENSE](plugins/codex-optimizer/LICENSE) and
+[NOTICE](plugins/codex-optimizer/NOTICE.md).

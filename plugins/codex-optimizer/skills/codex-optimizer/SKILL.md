@@ -10,7 +10,22 @@ This skill automatically loads for coding work. The user does not need to type
 forces the skill when the user wants it for a task outside the normal coding
 scope.
 
-## Automatic defaults
+## Session initialization
+
+The plugin's `SessionStart` hook loads effective defaults before the first
+tool call and injects them into the conversation. If hook context is absent,
+load the same values once per conversation with:
+
+```text
+python3 <skill-root>/scripts/codex_config.py show
+```
+
+Do not run the fallback when the hook already reported `codex-optimizer hooks
+active`. The command merges saved values with built-in defaults. An explicit
+request in the current conversation overrides the loaded value. After a
+requested `set` or `reset`, apply the printed JSON immediately.
+
+## Built-in defaults
 
 - Apply Caveman `full` by default: concise explanations that preserve all
   technical substance.
@@ -25,25 +40,27 @@ scope.
   fallback only when it affects the result. Do not repeatedly probe a missing
   binary in the same task.
 
-This is instruction-driven rather than a process-level hook. Codex writes an
-optimized command before running it; it does not silently intercept an already
-constructed shell call. The Pi extension itself is not loaded into Codex. The
-installed `rtk` CLI is the execution source for command rewriting and output
-compaction.
+Runtime optimization is hook-backed. `PreToolUse` delegates Bash commands to
+the installed `rtk rewrite` protocol and replaces supported commands before
+execution. `PostToolUse` compacts model-visible tool output. Both hooks emit a
+visible system message whenever they change data; unchanged commands and
+outputs remain silent. The external extension itself is not loaded into
+Codex—the installed `rtk` CLI remains the rewrite source.
 
 ## Mode selection
 
-All three modes are automatic whenever this skill is active:
+All three modes are automatic whenever this skill is active. Start from the
+effective defaults loaded during session initialization:
 
 - `caveman`: defaults to `full`; levels are `off`, `lite`, `full`, `ultra`,
   `micro`.
 - `ponytail`: defaults to `full`; levels are `off`, `lite`, `full`, `ultra`.
-- `rtk`: defaults to automatic `on`; `off` is a temporary opt-out.
+- `rtk`: defaults to automatic `on`; `off` can be loaded or requested.
 
 Do not wait for the user to mention a mode. Treat an explicit `rtk off`,
 `disable RTK`, `caveman off`, `ponytail off`, `normal mode`, or raw-output
-request as a temporary opt-out. Saved values are respected until the user
-changes them.
+request as a conversation override. Saved values are loaded once at the next
+conversation and remain effective until the user changes them.
 
 Treat “stop”, “quit”, and “normal mode” as a request to disable the named
 mode. A level change applies to the current conversation. Do not write a
@@ -97,17 +114,16 @@ the follow-up to at most three short lines.
 
 ## Automatic RTK behavior
 
-When preparing a shell command:
+The `PreToolUse` hook is authoritative for shell rewriting. Do not manually
+prefix a raw command just to simulate activation. When preparing shell work:
 
 1. Resolve `rtk` once when command optimization is needed. A missing binary is
    a normal fallback, not a reason to invent an invocation.
-2. Prefer the installed RTK wrapper that matches the command, such as
-   `rtk test`, `rtk git`, `rtk grep`, `rtk rg`, `rtk lint`, `rtk npm`, or
-   `rtk cargo`. Use `rtk --help` when the appropriate wrapper is unclear.
-3. For a compound command, use `rtk rewrite "<raw command>"` as the source of
-   truth for shell parsing, supported commands, bypasses, and partial rewrites.
-   Use a non-empty rewrite result; if it produces no safe rewrite, keep the
-   raw command or split the operation into clear commands.
+2. Submit the natural command. The hook uses `rtk rewrite "<raw command>"` as
+   the source of truth for supported wrappers, shell parsing, and partial
+   rewrites.
+3. Treat RTK exit code `3` plus non-empty stdout as a successful rewrite; this
+   is RTK's rewrite protocol, not an error.
 4. Do not double-prefix a command already beginning with `rtk`. Preserve
    operators and quoted text unless the installed rewriter changes them.
 5. Use plain commands when the user needs complete unfiltered output for
@@ -118,15 +134,43 @@ The bundled `rtk_rewrite.py` helper previews a rewrite without executing the
 command. It delegates to `rtk rewrite` when available and leaves the raw
 command unchanged when the binary is missing.
 
-Never send a `sudo` segment through the rewriter or direct RTK execution. Stop
-and use the host's approved elevated-operation flow, or ask the user to run it
-manually.
+Keep commands containing a lexically recognizable `sudo` invocation out of the
+rewriter and direct RTK execution. Use the host's approved elevated-operation
+flow, or ask the user to run the command manually.
+
+Also keep publish, remote-write, and destructive commands—such as `git push`,
+package publication, image pushes, infrastructure apply/destroy, `rm`, and
+`shred`—out of automatic rewriting. They must remain in Codex's normal
+approval path.
+
+## Automatic output compaction
+
+The `PostToolUse` hook automatically applies all enabled stages when their
+input matches. A stage appears in the visible `Applied:` message only when it
+actually changed the output:
+
+- ANSI Stripping
+- Test Aggregation
+- Build Filtering
+- Git Compaction
+- Linter Aggregation
+- Search Grouping
+- Source Code Filtering
+- Smart Truncation
+- Anchor-Safe Read Compaction
+- Hard Truncation
+
+Preserve reads of 80 lines or fewer, explicit offset/limit reads, and skill
+instruction files exactly. Preserve complete anchored edit lines. Source
+filtering must retain userscript metadata. A plain/unfiltered-output request
+overrides lossy compaction for that operation.
 
 ## Optional persistent defaults
 
 The bundled `codex_config.py` helper stores this plugin's defaults at
-`~/.codex/codex-optimizer.json`. Use it only after the user asks to save,
-show, or reset defaults:
+`~/.codex/codex-optimizer.json`. Run `show` automatically during session
+initialization. Run `set` or `reset` only after the user asks to persist a
+change:
 
 ```text
 python3 <skill-root>/scripts/codex_config.py show

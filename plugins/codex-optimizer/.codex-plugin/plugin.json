@@ -1,7 +1,7 @@
 {
   "name": "codex-optimizer",
-  "version": "0.1.0+codex.20260820150504",
-  "description": "Automatically apply all Codex Optimizer modes to coding tasks: concise responses, minimal implementations, and RTK command/output handling.",
+  "version": "0.2.0+codex.20260820172834",
+  "description": "Automatically rewrite supported shell commands with RTK, compact tool output through Codex hooks, and keep coding responses concise.",
   "author": {
     "name": "Lcryolite",
     "url": "https://github.com/Lcryolite/codex-optimizer"
@@ -20,14 +20,15 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Codex Optimizer",
-    "shortDescription": "Terse output, minimal diffs, optional RTK commands.",
-    "longDescription": "An automatically invoked Codex skill for coding tasks. Caveman full, Ponytail full, and RTK command/output optimization are enabled by default.",
+    "shortDescription": "Automatic RTK rewrites and visible output compaction.",
+    "longDescription": "A hook-backed Codex optimizer for coding tasks. It automatically rewrites supported Bash commands through RTK, compacts tool output, reports every applied stage, and enables Caveman full and Ponytail full by default.",
     "developerName": "Lcryolite",
     "category": "Productivity",
     "capabilities": [
       "Skills",
+      "Hooks",
       "Shell"
     ],
-    "defaultPrompt": "Automatically apply Caveman full, Ponytail full, and RTK to this coding task."
+    "defaultPrompt": "Automatically apply Caveman full, Ponytail full, RTK command rewriting, and all safe output-compaction stages to this coding task."
   }
 }

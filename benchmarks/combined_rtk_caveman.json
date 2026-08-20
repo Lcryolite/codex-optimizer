@@ -1,15 +1,25 @@
 {
-  "id": "rtk-caveman-test-run",
-  "description": "Run a passing test suite, then report the result concisely.",
+  "id": "automatic-rtk-caveman-test-run",
+  "description": "Run a deterministic 20-test Cargo-style fixture through the real RTK rewrite and Codex PostToolUse hook, then report it in Caveman full style.",
   "rtk_version_captured": "0.45.0",
+  "methodology": "Counts all model-visible operation text: assistant response, command, RTK tool output, PostToolUse compact context, and optimizer notices. Excludes the user prompt, tool JSON framing, hidden reasoning, and the once-per-session SessionStart notice.",
   "before": {
-    "assistant": "The test suite completed successfully. I ran the standard test command and all four tests passed across two test suites. The passing cases cover refreshing an expired token, rejecting a malformed token, returning the current user, and rejecting an unknown user. There were no failures or snapshot changes, so the repository is ready for the next step.",
-    "command": "bash benchmarks/fixtures/passing_suite.sh",
-    "tool_output": "\n> codex-optimizer-demo@1.0.0 test\n> jest --runInBand\n\nPASS src/auth.test.ts\n  ✓ refreshes an expired token (8 ms)\n  ✓ rejects a malformed token (2 ms)\nPASS src/user.test.ts\n  ✓ returns the current user (3 ms)\n  ✓ rejects an unknown user (1 ms)\n\nTest Suites: 2 passed, 2 total\nTests:       4 passed, 4 total\nSnapshots:   0 total\nTime:        1.248 s\nRan all test suites.\n"
+    "assistant": "The test suite completed successfully. I ran the full Cargo test command and all twenty tests passed in one suite. The passing cases cover access-token validation, refresh-token rotation, cache expiry, and the complete set of user creation, lookup, update, and rejection paths. There were no failed, ignored, measured, or filtered tests, and the run finished in 0.03 seconds, so the repository is ready for the next step.",
+    "command": "cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml",
+    "tool_output": "   Compiling codex-optimizer-benchmark v0.1.0\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.24s\n     Running unittests src/lib.rs (target/debug/deps/benchmark-0123456789abcdef)\n\nrunning 20 tests\ntest auth::accepts_valid_access_token ... ok\ntest auth::refreshes_expired_access_token ... ok\ntest auth::rejects_expired_refresh_token ... ok\ntest auth::rejects_malformed_access_token ... ok\ntest auth::rejects_missing_signature ... ok\ntest auth::rejects_unknown_issuer ... ok\ntest auth::rejects_wrong_audience ... ok\ntest auth::rotates_refresh_token ... ok\ntest cache::evicts_expired_entries ... ok\ntest cache::keeps_recent_entries ... ok\ntest user::creates_user ... ok\ntest user::deletes_user ... ok\ntest user::finds_user_by_email ... ok\ntest user::finds_user_by_id ... ok\ntest user::lists_active_users ... ok\ntest user::rejects_duplicate_email ... ok\ntest user::rejects_empty_email ... ok\ntest user::rejects_unknown_user ... ok\ntest user::updates_display_name ... ok\ntest user::updates_password_hash ... ok\n\ntest result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s\n",
+    "optimizer_notices": ""
   },
   "after": {
-    "assistant": "Tests pass: 4/4 in 2 suites; no failures.",
-    "command": "rtk test bash benchmarks/fixtures/passing_suite.sh",
-    "tool_output": "OUTPUT (last 5 lines):\n  Test Suites: 2 passed, 2 total\n  Tests:       4 passed, 4 total\n  Snapshots:   0 total\n  Time:        1.248 s\n  Ran all test suites.\n\n"
+    "assistant": "Tests pass: 20/20 in 1 suite; 0 failures.",
+    "command": "rtk cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml",
+    "tool_output": "cargo test: 20 passed (1 suite, 0.03s)\nTest Results:\n  PASS: 20 passed",
+    "optimizer_notices": "[codex-optimizer] RTK rewrite: cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml → rtk cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml\n[codex-optimizer] Context stages: Test Aggregation; compact view 39 → 31 chars; original result preserved.\n[codex-optimizer compact context; original tool result preserved]\nContext stages: Test Aggregation\nCompact view: 39 → 31 chars (8 fewer, 21%)"
+  },
+  "runtime": {
+    "rtk_output": "cargo test: 20 passed (1 suite, 0.03s)\n",
+    "compacted_output": "Test Results:\n  PASS: 20 passed",
+    "pre_system_message": "[codex-optimizer] RTK rewrite: cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml → rtk cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml",
+    "post_system_message": "[codex-optimizer] Context stages: Test Aggregation; compact view 39 → 31 chars; original result preserved.",
+    "compaction_header": "[codex-optimizer compact context; original tool result preserved]\nContext stages: Test Aggregation\nCompact view: 39 → 31 chars (8 fewer, 21%)\n"
   }
 }
