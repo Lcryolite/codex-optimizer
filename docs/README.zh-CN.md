@@ -15,15 +15,14 @@ shell 命令，在不注入重复模型上下文的前提下分析压缩候选�
 自然 Bash 命令
   → PreToolUse → rtk rewrite → 改写后的命令
   → 执行命令
-  → PostToolUse → 本地阶段分析 + 简短 UI 指标
+  → PostToolUse → 静默本地阶段分析 + 指标
 ```
 
 PreToolUse 不再输出 hook 消息或模型上下文，正常的命令执行行会直接显示 `rtk ...`，这已经
-是充分证据。PostToolUse 仅在阶段产生更小候选时显示简短的 UI 指标：
+是充分证据。PostToolUse 仅在本地记录更小候选，不输出 hook 消息：
 
 ```text
 rtk git status
-[codex-optimizer] Git Compaction: 4,742→900 chars
 ```
 
 会话启动时只向模型注入三个有效模式值，不再重复十个阶段名称。不支持的命令或不能产生
@@ -32,7 +31,7 @@ rtk git status
 Codex 目前没有“静默替换任意 PostToolUse 结果”的受支持字段。返回
 `continue: false` 虽能替换结果，但会把 hook 标记为 `(stopped)`。本插件明确不再这样做：
 RTK 在 Bash 输出进入 Codex 前完成真实缩减；PostToolUse 保留原始结果、记录候选指标，但
-不添加模型上下文。其 `systemMessage` 只进入 UI/event stream，不是 `additionalContext`。
+不输出 `systemMessage`、`additionalContext` 或阻断结果。
 详见官方 [Codex hooks 协议](https://learn.chatgpt.com/docs/hooks#posttooluse)。
 
 ## 默认模式
@@ -45,8 +44,8 @@ RTK 在 Bash 输出进入 Codex 前完成真实缩减；PostToolUse 保留原始
 
 ## 全部输出阶段
 
-只有产生更小候选的阶段才会显示。候选仅用于 UI 指标，不会与原始工具结果一起注入模型，
-因此分析增加零模型上下文，正常执行也不会变成 `(stopped)`。
+只有产生更小候选的阶段才会静默记录本地指标。候选不会输出，也不会与原始工具结果一起
+注入模型，因此分析增加零 transcript 和模型上下文，正常执行也不会变成 `(stopped)`。
 
 | 阶段 | 说明 |
 | --- | --- |
@@ -106,8 +105,8 @@ python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py r
 ## 可复现 Token 基准
 
 基准使用 `tiktoken 0.14.0` 和 `o200k_base`，统计 assistant 回复、实际执行命令和 RTK 工具
-输出。PreToolUse 不输出消息；PostToolUse 只产生 UI `systemMessage`，不产生模型
-`additionalContext`，所以 UI 提示单独展示，不计入模型输入。用户 prompt、tool-call JSON
+输出。PreToolUse 不输出消息；PostToolUse 静默记录本地指标，不输出 hook 消息或模型
+`additionalContext`。用户 prompt、tool-call JSON
 外壳、隐藏推理和每会话一次的模式上下文不计入单次操作表，而是在下方单独报告。fixture
 为确定性合成数据，因此字节级校验不依赖编译器版本或实际耗时。
 
@@ -157,13 +156,7 @@ test user::updates_password_hash ... ok
 test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
 ```
 
-### 自动 RTK + 零上下文 PostToolUse + Caveman 后
-
-可见 UI 证据：
-
-```text
-[codex-optimizer] Test Aggregation: 39→31 chars
-```
+### 自动 RTK + 静默 PostToolUse + Caveman 后
 
 实际执行命令：
 
@@ -177,7 +170,7 @@ RTK 先把原始 1,123 字符输出缩减为：
 cargo test: 20 passed (1 suite, 0.03s)
 ```
 
-PostToolUse 会计算以下候选用于 UI 指标，但不会把它注入模型上下文：
+PostToolUse 会计算以下候选用于本地指标，但不会输出它：
 
 ```text
 Test Results:
@@ -201,25 +194,25 @@ Tests pass: 20/20 in 1 suite; 0 failures.
 | **总计** | **409** | **49** | **360（88.0%）** |
 
 工具输出路径为：**307 原始 tokens → 16 RTK/模型可见 tokens**。PostToolUse 的
-9-token 候选和简短阶段提示都不注入模型。本次实测操作减少 88.0%；这是固定 fixture 的
+9-token 候选不会输出。本次实测操作减少 88.0%；这是固定 fixture 的
 证据，不是对所有任务的保证。
 
 固定激活上下文也明确计入：
 
 | 激活组成 | Tokens |
 | --- | ---: |
-| 默认 `SKILL.md` | 472 |
+| 默认 `SKILL.md` | 475 |
 | SessionStart 模式状态 | 20 |
-| **固定上下文总计** | **492** |
+| **固定上下文总计** | **495** |
 
 247-token 的可选模式设置 reference 仅在用户要求修改、解释、保存或重置模式时加载。同一
 fixture 在一次激活后重复执行时：
 
 | 操作次数 | 压缩前 | 含固定上下文的压缩后 | 节省 |
 | ---: | ---: | ---: | ---: |
-| 1 | 409 | 541 | -132（-32.3%） |
-| 2 | 818 | 590 | 228（27.9%） |
-| 5 | 2,045 | 737 | 1,308（64.0%） |
+| 1 | 409 | 544 | -135（-33.0%） |
+| 2 | 818 | 593 | 225（27.5%） |
+| 5 | 2,045 | 740 | 1,305（63.8%） |
 
 这是 transcript/上下文核算，不是账单承诺；provider prompt caching 和模型 continuation
 次数会另外影响实际计费输入。

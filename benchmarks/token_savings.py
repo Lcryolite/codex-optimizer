@@ -94,7 +94,7 @@ def print_combined_benchmark(encoder, data_path: Path) -> None:
     print(
         "tool-output pipeline: "
         f"raw {raw_tokens} -> RTK/model-visible {rtk_tokens}; "
-        f"PostToolUse candidate {candidate_tokens} tokens (UI/metrics only, not injected)"
+        f"PostToolUse candidate {candidate_tokens} tokens (local metrics only, not emitted)"
     )
     skill_text = (
         repo_root / "plugins" / "codex-optimizer" / "skills" / "codex-optimizer" / "SKILL.md"
@@ -158,7 +158,12 @@ def verify_runtime(data_path: Path) -> None:
             )
         return result.stdout
 
-    def run_hook(action: str, payload: dict[str, object]) -> dict[str, object]:
+    def run_hook(
+        action: str,
+        payload: dict[str, object],
+        *,
+        expect_output: bool = True,
+    ) -> dict[str, object] | None:
         result = subprocess.run(
             [sys.executable, str(hook), action],
             input=json.dumps(payload),
@@ -168,12 +173,12 @@ def verify_runtime(data_path: Path) -> None:
             check=False,
             env=environment,
         )
-        if result.returncode != 0 or result.stderr or not result.stdout:
+        if result.returncode != 0 or result.stderr or (expect_output and not result.stdout):
             raise SystemExit(
                 f"runtime hook failed: {action}\n"
                 f"exit={result.returncode}\nstderr={result.stderr!r}"
             )
-        return json.loads(result.stdout)
+        return json.loads(result.stdout) if result.stdout else None
 
     with tempfile.TemporaryDirectory() as temporary:
         environment["HOME"] = str(Path(temporary) / "home")
@@ -220,14 +225,12 @@ def verify_runtime(data_path: Path) -> None:
                 "tool_input": {"command": rewritten},
                 "tool_response": {"output": rtk_output},
             },
+            expect_output=False,
         )
-        require_equal("compaction notice", transcript["runtime"]["post_system_message"], post["systemMessage"])
-        if "continue" in post or post.get("decision") == "block":
-            raise SystemExit("PostToolUse must not stop or block")
-        if "additionalContext" in json.dumps(post):
-            raise SystemExit("PostToolUse analysis must not add model context")
+        if post is not None:
+            raise SystemExit("PostToolUse must emit no hook output")
 
-    print("runtime verification: PASS (silent RTK rewrite, RTK output, and token-neutral PostToolUse match fixtures)")
+    print("runtime verification: PASS (silent RTK rewrite, RTK output, and silent PostToolUse metrics match fixtures)")
 
 
 def main() -> int:

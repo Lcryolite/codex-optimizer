@@ -2,7 +2,7 @@
   "id": "automatic-rtk-caveman-test-run",
   "description": "Run a deterministic 20-test Cargo-style fixture through a silent RTK rewrite and token-neutral Codex PostToolUse analysis, then report it in Caveman full style.",
   "rtk_version_captured": "0.45.0",
-  "methodology": "Counts model-visible operation text: assistant response, executed command, and RTK tool output. PostToolUse emits only a UI systemMessage and no additionalContext, so its stage notice is shown but not counted as model input. The operation-only total excludes the user prompt, tool JSON framing, hidden reasoning, active SKILL.md, and SessionStart mode context; the benchmark script reports the skill and SessionStart costs separately.",
+  "methodology": "Counts model-visible operation text: assistant response, executed command, and RTK tool output. PostToolUse silently records candidate metrics and emits no hook output or additionalContext. The operation-only total excludes the user prompt, tool JSON framing, hidden reasoning, active SKILL.md, and SessionStart mode context; the benchmark script reports the skill and SessionStart costs separately.",
   "before": {
     "assistant": "The test suite completed successfully. I ran the full Cargo test command and all twenty tests passed in one suite. The passing cases cover access-token validation, refresh-token rotation, cache expiry, and the complete set of user creation, lookup, update, and rejection paths. There were no failed, ignored, measured, or filtered tests, and the run finished in 0.03 seconds, so the repository is ready for the next step.",
     "command": "cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml",
@@ -18,7 +18,6 @@
   "runtime": {
     "session_context": "codex-optimizer: caveman=full; ponytail=full; rtk=on.",
     "rtk_output": "cargo test: 20 passed (1 suite, 0.03s)\n",
-    "candidate_output": "Test Results:\n  PASS: 20 passed",
-    "post_system_message": "[codex-optimizer] Test Aggregation: 39→31 chars"
+    "candidate_output": "Test Results:\n  PASS: 20 passed"
   }
 }

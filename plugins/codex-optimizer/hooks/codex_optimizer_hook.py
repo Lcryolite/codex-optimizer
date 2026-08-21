@@ -115,13 +115,7 @@ def post_tool_use(payload: dict[str, Any]) -> dict[str, Any] | None:
         record(result.original_chars, result.compacted_chars, result.stages)
     except (OSError, TypeError, ValueError):
         pass
-    stages = ", ".join(result.stages)
-    return {
-        "systemMessage": (
-            f"[codex-optimizer] {stages}: "
-            f"{result.original_chars}→{result.compacted_chars} chars"
-        )
-    }
+    return None
 
 
 def main() -> int:

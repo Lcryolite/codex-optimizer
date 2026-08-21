@@ -9,7 +9,7 @@ Hook-backed Codex plugin with three automatic modes:
   exceptions for safety or irreversible actions.
 - Ponytail `full`: smallest correct implementation.
 - RTK `on`: silent `PreToolUse` command rewriting plus token-neutral
-  `PostToolUse` stage analysis.
+  and silent `PostToolUse` stage analysis.
 
 ## Install
 
@@ -32,16 +32,16 @@ python3 scripts/codex_optimizer.py status
 python3 scripts/codex_optimizer.py stats
 ```
 
-The runtime implements and reports all ten stages: ANSI Stripping, Test
+The runtime implements all ten stages: ANSI Stripping, Test
 Aggregation, Build Filtering, Git Compaction, Linter Aggregation, Search
 Grouping, Source Code Filtering, Smart Truncation, Anchor-Safe Read
-Compaction, and Hard Truncation.
+Compaction, and Hard Truncation. Stage metrics are recorded locally without
+hook output.
 
 The root README includes the full pre-compression transcript, actual RTK
-rewrite/output, UI-versus-model-context accounting, and a byte-for-byte
-reproducible token benchmark. Measured combined result: **409 → 49 tokens
-(88.0% operation-only)**; output-stage analysis adds no model context. Including
-the 343-token one-time activation context, the first fixture is **409 → 392
-(4.2% saved)** and repeated operations amortize that fixed context.
+rewrite/output, and a byte-for-byte reproducible token benchmark. Measured
+combined result: **409 → 49 tokens (88.0% operation-only)**; output-stage
+analysis emits no transcript or model context. See the root README for current
+activation-cost accounting.
 
 MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE.md).

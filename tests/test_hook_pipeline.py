@@ -255,6 +255,7 @@ class RuntimeHookTests(unittest.TestCase):
         payload: dict[str, object],
         *,
         fake_rtk: bool = False,
+        plugin_data: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -262,7 +263,7 @@ class RuntimeHookTests(unittest.TestCase):
         environment = os.environ.copy()
         environment["HOME"] = str(root / "home")
         environment["PLUGIN_ROOT"] = str(PLUGIN)
-        environment["PLUGIN_DATA"] = str(root / "data")
+        environment["PLUGIN_DATA"] = str(plugin_data or root / "data")
         if fake_rtk:
             binary = root / "rtk"
             binary.write_text(
@@ -317,25 +318,27 @@ class RuntimeHookTests(unittest.TestCase):
         )
         self.assertEqual(result.stdout, "")
 
-    def test_post_tool_use_reports_stages_without_adding_model_context(self) -> None:
+    def test_post_tool_use_records_metrics_without_hook_output(self) -> None:
         raw = "\x1b[32m" + "\n".join(f"case_{index} PASSED" for index in range(30))
         raw += "\n30 passed in 1.0s\x1b[0m"
-        result = self.run_hook(
-            "post-tool-use",
-            {
-                "tool_name": "Bash",
-                "tool_input": {"command": "pytest -q"},
-                "tool_response": {"output": raw},
-            },
-        )
-        response = json.loads(result.stdout)
+        with tempfile.TemporaryDirectory() as temporary:
+            data = Path(temporary)
+            result = self.run_hook(
+                "post-tool-use",
+                {
+                    "tool_name": "Bash",
+                    "tool_input": {"command": "pytest -q"},
+                    "tool_response": {"output": raw},
+                },
+                plugin_data=data,
+            )
+            metrics = json.loads((data / "metrics.json").read_text(encoding="utf-8"))
 
-        self.assertNotIn("continue", response)
-        self.assertNotEqual(response.get("decision"), "block")
-        self.assertIn("ANSI Stripping", response["systemMessage"])
-        self.assertIn("Test Aggregation", response["systemMessage"])
-        self.assertNotIn("hookSpecificOutput", response)
-        self.assertNotIn("additionalContext", json.dumps(response))
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(metrics["events"], 1)
+        self.assertEqual(metrics["stages"]["ANSI Stripping"], 1)
+        self.assertEqual(metrics["stages"]["Test Aggregation"], 1)
 
     def test_session_start_injects_only_compact_mode_state(self) -> None:
         result = self.run_hook("session-start", {"session_id": "test"})

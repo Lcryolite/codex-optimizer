@@ -35,8 +35,8 @@ Use raw commands for requested exact/unfiltered output and machine-readable
 diagnostics. Leave sudo, destructive, publish, and remote-write commands in
 Codex's normal approval path.
 
-PostToolUse runs all output stages for UI metrics, adds no model context, and
-never stops tool processing.
+PostToolUse silently records local candidate metrics. It emits no hook output,
+adds no model context, and never stops tool processing.
 
 ## Overrides
 

@@ -16,16 +16,15 @@ runtime path is:
 natural Bash command
   → PreToolUse → rtk rewrite → rewritten command
   → command execution
-  → PostToolUse → local stage analysis + concise UI metric
+  → PostToolUse → silent local stage analysis + metrics
 ```
 
 PreToolUse emits no hook message or model context. The normal executed-command
-line is the evidence: it directly shows `rtk ...`. PostToolUse emits a concise
-UI-only metric when an analysis stage finds a smaller candidate:
+line is the evidence: it directly shows `rtk ...`. PostToolUse records smaller
+candidates locally without emitting hook output:
 
 ```text
 rtk git status
-[codex-optimizer] Git Compaction: 4,742→900 chars
 ```
 
 At session start the model receives only the three effective mode values; the
@@ -36,9 +35,9 @@ Codex currently has no supported PostToolUse field that silently replaces an
 arbitrary tool result. Returning `continue: false` performs replacement but
 marks the hook as `(stopped)`. Codex Optimizer deliberately does not do that:
 RTK performs real output reduction before Bash results reach Codex, while
-PostToolUse preserves the original result, records candidate metrics, and adds
-no model context. Its `systemMessage` is a UI/event-stream warning, not
-`additionalContext`. See the official
+PostToolUse preserves the original result and silently records candidate
+metrics. It emits no `systemMessage`, `additionalContext`, or blocking result.
+See the official
 [Codex hooks protocol](https://learn.chatgpt.com/docs/hooks#posttooluse).
 
 ## Modes
@@ -53,10 +52,10 @@ All modes are enabled by default:
 
 ## Output stages
 
-A stage is shown only when it produces a smaller candidate. Candidates are
-used for UI metrics and are never injected beside the original tool result, so
-normal execution never becomes `(stopped)` and stage analysis adds zero model
-context.
+Stages silently record local metrics only when they produce a smaller
+candidate. Candidates are never emitted or injected beside the original tool
+result, so normal execution never becomes `(stopped)` and stage analysis adds
+zero transcript or model context.
 
 | Stage | Description |
 | --- | --- |
@@ -126,8 +125,8 @@ python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py r
 
 The benchmark uses `tiktoken 0.14.0` with `o200k_base`. It counts the assistant
 response, executed command, and RTK tool output. PreToolUse emits no message;
-PostToolUse emits a UI `systemMessage` but no model `additionalContext`, so UI
-notices are shown separately and correctly excluded from model-input totals.
+PostToolUse silently records local metrics and emits no hook output or model
+`additionalContext`.
 The user prompt, tool-call JSON framing, hidden reasoning, and once-per-session
 mode context are excluded from the operation-only table and reported
 separately below. This deterministic synthetic fixture makes byte-for-byte
@@ -179,13 +178,7 @@ test user::updates_password_hash ... ok
 test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
 ```
 
-### After automatic RTK + token-neutral PostToolUse + Caveman
-
-Visible UI evidence:
-
-```text
-[codex-optimizer] Test Aggregation: 39→31 chars
-```
+### After automatic RTK + silent PostToolUse + Caveman
 
 Executed command:
 
@@ -199,8 +192,7 @@ RTK first reduces the raw 1,123-character output to:
 cargo test: 20 passed (1 suite, 0.03s)
 ```
 
-PostToolUse computes this candidate for UI metrics without injecting it into
-model context:
+PostToolUse computes this candidate for local metrics without emitting it:
 
 ```text
 Test Results:
@@ -224,17 +216,17 @@ Exact token accounting:
 | **Total** | **409** | **49** | **360 (88.0%)** |
 
 Tool-output path: **307 raw tokens → 16 RTK/model-visible tokens**.
-PostToolUse's 9-token candidate and concise stage notice are not injected into
-the model. The measured operation is 88.0% smaller. This fixture is evidence,
-not a universal promise; savings vary with command, output, and response style.
+PostToolUse's 9-token candidate is not emitted. The measured operation is
+88.0% smaller. This fixture is evidence, not a universal promise; savings vary
+with command, output, and response style.
 
 Fixed activation context is also measured, rather than hidden:
 
 | Activation component | Tokens |
 | --- | ---: |
-| Default `SKILL.md` | 472 |
+| Default `SKILL.md` | 475 |
 | SessionStart mode state | 20 |
-| **Total fixed context** | **492** |
+| **Total fixed context** | **495** |
 
 The optional 247-token mode-settings reference is loaded only when the user
 asks to change, explain, save, or reset a mode. Repeating the same synthetic
@@ -242,9 +234,9 @@ operation after one activation gives:
 
 | Operations | Before | After including fixed context | Saved |
 | ---: | ---: | ---: | ---: |
-| 1 | 409 | 541 | -132 (-32.3%) |
-| 2 | 818 | 590 | 228 (27.9%) |
-| 5 | 2,045 | 737 | 1,308 (64.0%) |
+| 1 | 409 | 544 | -135 (-33.0%) |
+| 2 | 818 | 593 | 225 (27.5%) |
+| 5 | 2,045 | 740 | 1,305 (63.8%) |
 
 This is transcript/context accounting, not a billing promise; provider prompt
 caching and the number of model continuations affect billed input separately.
