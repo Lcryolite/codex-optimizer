@@ -7,8 +7,8 @@ Hook-backed Codex plugin with three automatic modes:
 
 - Caveman `full`: concise, technically complete responses.
 - Ponytail `full`: smallest correct implementation.
-- RTK `on`: real `PreToolUse` command rewriting plus non-stopping
-  `PostToolUse` compact context with visible stage notices.
+- RTK `on`: silent `PreToolUse` command rewriting plus token-neutral
+  `PostToolUse` stage analysis.
 
 ## Install
 
@@ -36,9 +36,11 @@ Aggregation, Build Filtering, Git Compaction, Linter Aggregation, Search
 Grouping, Source Code Filtering, Smart Truncation, Anchor-Safe Read
 Compaction, and Hard Truncation.
 
-The root README includes the full pre-compression transcript, the actual RTK
-rewrite/output, all visible overhead, and a byte-for-byte reproducible token
-benchmark. Measured combined result: **409 → 164 tokens (59.9% saved)**,
-including preserved RTK output and every visible notice.
+The root README includes the full pre-compression transcript, actual RTK
+rewrite/output, UI-versus-model-context accounting, and a byte-for-byte
+reproducible token benchmark. Measured combined result: **409 → 49 tokens
+(88.0% operation-only)**; output-stage analysis adds no model context. Including
+the 343-token one-time activation context, the first fixture is **409 → 392
+(4.2% saved)** and repeated operations amortize that fixed context.
 
 MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE.md).

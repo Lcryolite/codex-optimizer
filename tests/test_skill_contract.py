@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 import sys
 import tempfile
@@ -21,15 +20,34 @@ SKILL = (
     / "SKILL.md"
 )
 CONFIG = SKILL.parent / "scripts" / "codex_config.py"
+HOOK = PLUGIN / "hooks" / "codex_optimizer_hook.py"
 
 
 class PersistentDefaultsContractTests(unittest.TestCase):
-    def test_skill_loads_effective_defaults_once_per_conversation(self) -> None:
-        instructions = SKILL.read_text(encoding="utf-8")
+    def test_session_start_loads_saved_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            environment = os.environ.copy()
+            environment["HOME"] = temporary
+            environment["PLUGIN_ROOT"] = str(PLUGIN)
+            environment["PLUGIN_DATA"] = str(Path(temporary) / "data")
+            subprocess.run(
+                [sys.executable, str(CONFIG), "set", "caveman", "off"],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
+            result = subprocess.run(
+                [sys.executable, str(HOOK), "session-start"],
+                input="{}",
+                check=True,
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
 
-        self.assertIn("codex_config.py show", instructions)
-        self.assertRegex(instructions, re.compile(r"once.*conversation", re.IGNORECASE))
-        self.assertRegex(instructions, re.compile(r"effective.*defaults", re.IGNORECASE))
+        context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("caveman=off", context)
 
     def test_saved_override_is_visible_to_a_new_process(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

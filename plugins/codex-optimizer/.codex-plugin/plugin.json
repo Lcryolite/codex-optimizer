@@ -1,7 +1,7 @@
 {
   "name": "codex-optimizer",
-  "version": "0.2.0+codex.20260820173840",
-  "description": "Automatically rewrite supported shell commands with RTK, compact tool output through Codex hooks, and keep coding responses concise.",
+  "version": "0.2.0+codex.20260821042129",
+  "description": "Silently rewrite supported shell commands with RTK, analyze output-compaction candidates without duplicate model context, and keep coding responses concise.",
   "author": {
     "name": "Lcryolite",
     "url": "https://github.com/Lcryolite/codex-optimizer"
@@ -20,8 +20,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Codex Optimizer",
-    "shortDescription": "Automatic RTK rewrites and visible output compaction.",
-    "longDescription": "A hook-backed Codex optimizer for coding tasks. It automatically rewrites supported Bash commands through RTK, compacts tool output, reports every applied stage, and enables Caveman full and Ponytail full by default.",
+    "shortDescription": "Silent RTK rewrites and token-neutral output analysis.",
+    "longDescription": "A hook-backed Codex optimizer for coding tasks. It silently rewrites supported Bash commands through RTK, analyzes output-compaction candidates without adding duplicate model context, reports matching stages in the UI, and enables Caveman full and Ponytail full by default.",
     "developerName": "Lcryolite",
     "category": "Productivity",
     "capabilities": [
@@ -29,6 +29,6 @@
       "Hooks",
       "Shell"
     ],
-    "defaultPrompt": "Automatically apply Caveman full, Ponytail full, RTK command rewriting, and all safe output-compaction stages to this coding task."
+    "defaultPrompt": "Automatically apply Caveman full, Ponytail full, silent RTK command rewriting, and token-neutral output-stage analysis to this coding task."
   }
 }

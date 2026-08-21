@@ -13,7 +13,7 @@ from typing import Any
 PLUGIN_ROOT = Path(os.environ.get("PLUGIN_ROOT", Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(PLUGIN_ROOT / "lib"))
 
-from codex_optimizer.compact import ALL_STAGES, compact_tool_output  # noqa: E402
+from codex_optimizer.compact import compact_tool_output  # noqa: E402
 from codex_optimizer.config import load  # noqa: E402
 from codex_optimizer.metrics import record  # noqa: E402
 from codex_optimizer.rewrite import safe_rewrite  # noqa: E402
@@ -64,15 +64,12 @@ def _extract_text(value: Any) -> str | None:
 
 def session_start() -> dict[str, Any]:
     modes = load()
-    stage_list = ", ".join(ALL_STAGES)
     context = (
-        "codex-optimizer hooks active. "
-        f"Caveman={modes['caveman']}; Ponytail={modes['ponytail']}; RTK={modes['rtk']}. "
-        f"Output stages enabled: {stage_list}. "
-        "RTK rewrites and compact-context stages are announced in system messages."
+        f"codex-optimizer: caveman={modes['caveman']}; "
+        f"ponytail={modes['ponytail']}; rtk={modes['rtk']}."
     )
     return {
-        "systemMessage": "[codex-optimizer] hooks active; RTK rewrite and output-stage notices enabled.",
+        "systemMessage": "[codex-optimizer] active",
         "hookSpecificOutput": {
             "hookEventName": "SessionStart",
             "additionalContext": context,
@@ -96,15 +93,10 @@ def pre_tool_use(payload: dict[str, Any]) -> dict[str, Any] | None:
     updated = dict(tool_input)
     updated["command"] = rewritten
     return {
-        "systemMessage": f"[codex-optimizer] RTK rewrite: {command} → {rewritten}",
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "allow",
             "updatedInput": updated,
-            "additionalContext": (
-                "codex-optimizer applied an RTK rewrite for this tool call: "
-                f"{command} → {rewritten}"
-            ),
         },
     }
 
@@ -123,23 +115,12 @@ def post_tool_use(payload: dict[str, Any]) -> dict[str, Any] | None:
         record(result.original_chars, result.compacted_chars, result.stages)
     except (OSError, TypeError, ValueError):
         pass
-    percent = round(result.saved_chars * 100 / result.original_chars) if result.original_chars else 0
     stages = ", ".join(result.stages)
-    banner = (
-        "[codex-optimizer compact context; original tool result preserved]\n"
-        f"Context stages: {stages}\n"
-        f"Compact view: {result.original_chars} → {result.compacted_chars} chars "
-        f"({result.saved_chars} fewer, {percent}%)\n"
-    )
     return {
         "systemMessage": (
-            f"[codex-optimizer] Context stages: {stages}; compact view "
-            f"{result.original_chars} → {result.compacted_chars} chars; original result preserved."
-        ),
-        "hookSpecificOutput": {
-            "hookEventName": "PostToolUse",
-            "additionalContext": banner + result.text,
-        },
+            f"[codex-optimizer] {stages}: "
+            f"{result.original_chars}→{result.compacted_chars} chars"
+        )
     }
 
 

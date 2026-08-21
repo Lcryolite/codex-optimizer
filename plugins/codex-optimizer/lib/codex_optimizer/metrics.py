@@ -1,4 +1,4 @@
-"""Concurrency-safe aggregate compact-context metrics for plugin hooks."""
+"""Concurrency-safe metrics for potential output-compaction candidates."""
 
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ def _empty() -> dict[str, Any]:
     return {
         "events": 0,
         "source_chars": 0,
-        "compact_context_chars": 0,
-        "context_delta_chars": 0,
-        "estimated_context_delta_tokens": 0,
+        "candidate_chars": 0,
+        "candidate_reduction_chars": 0,
+        "estimated_candidate_reduction_tokens": 0,
         "stages": {},
     }
 
@@ -36,14 +36,22 @@ def _read(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         return _empty()
     normalized = _empty()
+    legacy_keys = {
+        "candidate_chars": "compact_context_chars",
+        "candidate_reduction_chars": "context_delta_chars",
+        "estimated_candidate_reduction_tokens": "estimated_context_delta_tokens",
+    }
     for key in (
         "events",
         "source_chars",
-        "compact_context_chars",
-        "context_delta_chars",
-        "estimated_context_delta_tokens",
+        "candidate_chars",
+        "candidate_reduction_chars",
+        "estimated_candidate_reduction_tokens",
     ):
         raw = value.get(key)
+        legacy_key = legacy_keys.get(key)
+        if raw is None and legacy_key is not None:
+            raw = value.get(legacy_key)
         if isinstance(raw, int) and raw >= 0:
             normalized[key] = raw
     stages = value.get("stages")
@@ -82,9 +90,13 @@ def record(original_chars: int, compacted_chars: int, stages: tuple[str, ...]) -
         saved = max(0, original_chars - compacted_chars)
         value["events"] = int(value.get("events", 0)) + 1
         value["source_chars"] = int(value.get("source_chars", 0)) + original_chars
-        value["compact_context_chars"] = int(value.get("compact_context_chars", 0)) + compacted_chars
-        value["context_delta_chars"] = int(value.get("context_delta_chars", 0)) + saved
-        value["estimated_context_delta_tokens"] = round(int(value["context_delta_chars"]) / 4)
+        value["candidate_chars"] = int(value.get("candidate_chars", 0)) + compacted_chars
+        value["candidate_reduction_chars"] = (
+            int(value.get("candidate_reduction_chars", 0)) + saved
+        )
+        value["estimated_candidate_reduction_tokens"] = round(
+            int(value["candidate_reduction_chars"]) / 4
+        )
         stage_counts = value.setdefault("stages", {})
         if not isinstance(stage_counts, dict):
             stage_counts = {}

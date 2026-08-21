@@ -15,7 +15,7 @@ import tempfile
 
 
 LEVELS = ("lite", "full", "ultra", "micro")
-TRANSCRIPT_PARTS = ("assistant", "command", "tool_output", "optimizer_notices")
+TRANSCRIPT_PARTS = ("assistant", "command", "tool_output", "model_context_notices")
 
 
 def load_encoder(name: str):
@@ -66,6 +66,7 @@ def print_response_benchmark(encoder, data_path: Path) -> None:
 
 def print_combined_benchmark(encoder, data_path: Path) -> None:
     transcript = json.loads(data_path.read_text(encoding="utf-8"))
+    repo_root = Path(__file__).resolve().parents[1]
     before = {
         part: count(encoder, transcript["before"][part]) for part in TRANSCRIPT_PARTS
     }
@@ -89,12 +90,32 @@ def print_combined_benchmark(encoder, data_path: Path) -> None:
     )
     raw_tokens = before["tool_output"]
     rtk_tokens = count(encoder, transcript["runtime"]["rtk_output"])
-    context_tokens = count(encoder, transcript["runtime"]["compacted_output"])
+    candidate_tokens = count(encoder, transcript["runtime"]["candidate_output"])
     print(
         "tool-output pipeline: "
-        f"raw {raw_tokens} -> RTK {rtk_tokens}; PostToolUse context {context_tokens}; "
-        f"model-visible total {after['tool_output']} tokens"
+        f"raw {raw_tokens} -> RTK/model-visible {rtk_tokens}; "
+        f"PostToolUse candidate {candidate_tokens} tokens (UI/metrics only, not injected)"
     )
+    skill_text = (
+        repo_root / "plugins" / "codex-optimizer" / "skills" / "codex-optimizer" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    skill_tokens = count(encoder, skill_text)
+    session_tokens = count(encoder, transcript["runtime"]["session_context"])
+    fixed_tokens = skill_tokens + session_tokens
+    print(
+        f"activation context: skill {skill_tokens} + SessionStart {session_tokens} "
+        f"= {fixed_tokens} tokens"
+    )
+    print("repeated fixture including one activation context")
+    for operations in (1, 2, 5):
+        activated_before = before_total * operations
+        activated_after = fixed_tokens + after_total * operations
+        activated_saved = activated_before - activated_after
+        activated_percent = activated_saved / activated_before * 100
+        print(
+            f"  {operations} operation(s): {activated_before} -> {activated_after}; "
+            f"saved {activated_saved} ({activated_percent:.1f}%)"
+        )
 
 
 def verify_runtime(data_path: Path) -> None:
@@ -162,6 +183,13 @@ def verify_runtime(data_path: Path) -> None:
         raw_output = run_command(transcript["before"]["command"])
         require_equal("raw output", transcript["before"]["tool_output"], raw_output)
 
+        session = run_hook("session-start", {})
+        require_equal(
+            "SessionStart context",
+            transcript["runtime"]["session_context"],
+            session["hookSpecificOutput"]["additionalContext"],
+        )
+
         pre = run_hook(
             "pre-tool-use",
             {
@@ -171,10 +199,20 @@ def verify_runtime(data_path: Path) -> None:
         )
         rewritten = pre["hookSpecificOutput"]["updatedInput"]["command"]
         require_equal("rewritten command", transcript["after"]["command"], rewritten)
-        require_equal("rewrite notice", transcript["runtime"]["pre_system_message"], pre["systemMessage"])
+        if "systemMessage" in pre or "additionalContext" in json.dumps(pre):
+            raise SystemExit("PreToolUse rewrite must not repeat commands in hook output")
 
         rtk_output = run_command(rewritten)
         require_equal("RTK output", transcript["runtime"]["rtk_output"], rtk_output)
+        sys.path.insert(0, str(plugin / "lib"))
+        from codex_optimizer.compact import compact_tool_output
+
+        candidate = compact_tool_output("Bash", {"command": rewritten}, rtk_output)
+        require_equal(
+            "PostToolUse candidate",
+            transcript["runtime"]["candidate_output"],
+            candidate.text,
+        )
         post = run_hook(
             "post-tool-use",
             {
@@ -185,20 +223,11 @@ def verify_runtime(data_path: Path) -> None:
         )
         require_equal("compaction notice", transcript["runtime"]["post_system_message"], post["systemMessage"])
         if "continue" in post or post.get("decision") == "block":
-            raise SystemExit("PostToolUse must add context without stopping or blocking")
-        additional = post["hookSpecificOutput"]["additionalContext"]
-        expected_additional = transcript["runtime"]["compaction_header"] + transcript["runtime"]["compacted_output"]
-        require_equal("compacted output", expected_additional, additional)
-        notices = "\n".join(
-            (
-                pre["systemMessage"],
-                post["systemMessage"],
-                transcript["runtime"]["compaction_header"].rstrip("\n"),
-            )
-        )
-        require_equal("optimizer notices", transcript["after"]["optimizer_notices"], notices)
+            raise SystemExit("PostToolUse must not stop or block")
+        if "additionalContext" in json.dumps(post):
+            raise SystemExit("PostToolUse analysis must not add model context")
 
-    print("runtime verification: PASS (raw command, RTK rewrite, RTK output, and PostToolUse output match fixtures)")
+    print("runtime verification: PASS (silent RTK rewrite, RTK output, and token-neutral PostToolUse match fixtures)")
 
 
 def main() -> int:

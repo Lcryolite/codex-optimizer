@@ -30,8 +30,7 @@
           {
             "type": "command",
             "command": "python3 -c \"import glob,os,runpy,sys; d=os.path.dirname(os.environ['PLUGIN_ROOT']); m=lambda p:os.path.join(os.path.dirname(os.path.dirname(p)),'.codex-plugin','plugin.json'); ps=[p for p in glob.glob(os.path.join(d,'*','hooks','codex_optimizer_hook.py')) if os.path.isfile(m(p))]; p=max(ps,key=lambda p:os.path.getmtime(m(p))); os.environ['PLUGIN_ROOT']=os.path.dirname(os.path.dirname(p)); sys.argv=[p,sys.argv[1]]; runpy.run_path(p,run_name='__main__')\" post-tool-use",
-            "timeout": 15,
-            "additionalContextLimit": 3500
+            "timeout": 15
           }
         ]
       }

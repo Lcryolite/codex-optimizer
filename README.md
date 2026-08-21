@@ -1,8 +1,8 @@
 # Codex Optimizer
 
-A hook-backed Codex plugin that automatically rewrites supported shell
-commands through RTK, adds compact tool context, keeps responses concise, and
-avoids unnecessary implementation scope.
+A hook-backed Codex plugin that silently rewrites supported shell commands
+through RTK, analyzes compaction candidates without injecting duplicate model
+context, keeps responses concise, and avoids unnecessary implementation scope.
 
 [中文文档 / Chinese documentation](docs/README.zh-CN.md)
 
@@ -16,27 +16,30 @@ runtime path is:
 natural Bash command
   → PreToolUse → rtk rewrite → rewritten command
   → command execution
-  → PostToolUse → deterministic compact context → model-visible continuation
+  → PostToolUse → local stage analysis + concise UI metric
 ```
 
-The plugin is automatic but not invisible. It emits evidence only when data
-changes:
+PreToolUse emits no hook message or model context. The normal executed-command
+line is the evidence: it directly shows `rtk ...`. PostToolUse emits a concise
+UI-only metric when an analysis stage finds a smaller candidate:
 
 ```text
-[codex-optimizer] RTK rewrite: git status → rtk git status
-[codex-optimizer] Context stages: Git Compaction; compact view 4,742 → 900 chars; original result preserved.
+rtk git status
+[codex-optimizer] Git Compaction: 4,742→900 chars
 ```
 
-At session start it also reports that the hooks are active and lists every
-enabled stage. Unsupported commands and outputs that do not benefit from
-compaction remain unchanged and produce no false stage notice.
+At session start the model receives only the three effective mode values; the
+ten-stage list is not repeated into every conversation. Unsupported commands
+and outputs that do not produce a smaller candidate remain silent.
 
 Codex currently has no supported PostToolUse field that silently replaces an
 arbitrary tool result. Returning `continue: false` performs replacement but
 marks the hook as `(stopped)`. Codex Optimizer deliberately does not do that:
 RTK performs real output reduction before Bash results reach Codex, while
-PostToolUse preserves the original result and adds a compact context view. See
-the official [Codex hooks protocol](https://learn.chatgpt.com/docs/hooks#posttooluse).
+PostToolUse preserves the original result, records candidate metrics, and adds
+no model context. Its `systemMessage` is a UI/event-stream warning, not
+`additionalContext`. See the official
+[Codex hooks protocol](https://learn.chatgpt.com/docs/hooks#posttooluse).
 
 ## Modes
 
@@ -46,12 +49,14 @@ All modes are enabled by default:
 | --- | --- | --- |
 | Caveman | `full` | Removes response filler while preserving code, exact errors, safety constraints, and requested formats. |
 | Ponytail | `full` | Chooses the smallest correct implementation; prefers standard library, platform features, and existing dependencies. |
-| RTK | `on` | Uses a real `PreToolUse` rewrite and `PostToolUse` output pipeline. |
+| RTK | `on` | Uses a silent `PreToolUse` rewrite and token-neutral `PostToolUse` analysis. |
 
 ## Output stages
 
-A stage is shown only when it transforms the compact context view. The original
-tool result is preserved so normal execution never becomes `(stopped)`.
+A stage is shown only when it produces a smaller candidate. Candidates are
+used for UI metrics and are never injected beside the original tool result, so
+normal execution never becomes `(stopped)` and stage analysis adds zero model
+context.
 
 | Stage | Description |
 | --- | --- |
@@ -64,7 +69,7 @@ tool result is preserved so normal execution never becomes `(stopped)`.
 | Source Code Filtering | Removes redundant comments/blank lines only when a large read already needs lossy compaction; userscript metadata is preserved. |
 | Smart Truncation | Keeps representative head/tail context and reports omitted lines. |
 | Anchor-Safe Read Compaction | Recognizes anchored read formats and keeps complete edit anchors. |
-| Hard Truncation | Enforces the compact-context 12,000-character ceiling. |
+| Hard Truncation | Enforces the 12,000-character candidate ceiling. |
 
 Safety invariants are tested: reads of 80 lines or fewer remain exact,
 explicit offset/limit reads remain exact, skill files remain exact, and
@@ -97,16 +102,16 @@ Then ask for normal coding work—no trigger phrase is needed. An explicit
 ## Verify activation and savings
 
 The status command lists all effective modes, all ten stages, and cumulative
-compact-context deltas:
+candidate reductions:
 
 ```bash
 python3 plugins/codex-optimizer/scripts/codex_optimizer.py status
 python3 plugins/codex-optimizer/scripts/codex_optimizer.py stats
 ```
 
-Metrics are written under Codex's per-plugin data directory. They describe
-compact-context size differences, not guaranteed model-input savings. The
-reproducible end-to-end benchmark below uses an actual tokenizer.
+Metrics are written under Codex's per-plugin data directory. Candidate
+reductions are diagnostic opportunities, not claimed model-input savings. The
+reproducible end-to-end benchmark below counts only actual model-visible text.
 
 Persistent mode overrides are opt-in:
 
@@ -119,13 +124,14 @@ python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py r
 
 ## Reproducible token benchmark
 
-The benchmark uses `tiktoken 0.14.0` with `o200k_base`. It counts all
-model-visible text for the measured operation: assistant response, command,
-RTK tool output, PostToolUse compact context, rewrite/stage notices, and context
-header. It excludes the user prompt, tool-call JSON framing, hidden reasoning,
-and the once-per-session activation notice. This is a deterministic synthetic
-fixture so byte-for-byte runtime verification does not depend on compiler
-versions or timing.
+The benchmark uses `tiktoken 0.14.0` with `o200k_base`. It counts the assistant
+response, executed command, and RTK tool output. PreToolUse emits no message;
+PostToolUse emits a UI `systemMessage` but no model `additionalContext`, so UI
+notices are shown separately and correctly excluded from model-input totals.
+The user prompt, tool-call JSON framing, hidden reasoning, and once-per-session
+mode context are excluded from the operation-only table and reported
+separately below. This deterministic synthetic fixture makes byte-for-byte
+runtime verification independent of compiler versions or timing.
 
 ### Before optimization
 
@@ -173,16 +179,12 @@ test user::updates_password_hash ... ok
 test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
 ```
 
-### After automatic RTK + PostToolUse + Caveman
+### After automatic RTK + token-neutral PostToolUse + Caveman
 
-Visible optimizer evidence:
+Visible UI evidence:
 
 ```text
-[codex-optimizer] RTK rewrite: cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml → rtk cargo test --manifest-path benchmarks/fixtures/rust-project/Cargo.toml
-[codex-optimizer] Context stages: Test Aggregation; compact view 39 → 31 chars; original result preserved.
-[codex-optimizer compact context; original tool result preserved]
-Context stages: Test Aggregation
-Compact view: 39 → 31 chars (8 fewer, 21%)
+[codex-optimizer] Test Aggregation: 39→31 chars
 ```
 
 Executed command:
@@ -197,7 +199,8 @@ RTK first reduces the raw 1,123-character output to:
 cargo test: 20 passed (1 suite, 0.03s)
 ```
 
-PostToolUse keeps that RTK result and adds this compact context:
+PostToolUse computes this candidate for UI metrics without injecting it into
+model context:
 
 ```text
 Test Results:
@@ -216,15 +219,35 @@ Exact token accounting:
 | --- | ---: | ---: | ---: |
 | Assistant response | 87 | 16 | 71 |
 | Command | 15 | 17 | -2 |
-| Tool output + compact context | 307 | 25 | 282 |
-| Optimizer notices | 0 | 106 | -106 |
-| **Total** | **409** | **164** | **245 (59.9%)** |
+| Tool output | 307 | 16 | 291 |
+| Model-context optimizer notices | 0 | 0 | 0 |
+| **Total** | **409** | **49** | **360 (88.0%)** |
 
-Tool-output path: **307 raw tokens → 16 RTK tokens**, plus **9 tokens of
-PostToolUse compact context**. Including preserved RTK output and every visible
-notice makes the end-to-end result 59.9% smaller. This measured fixture is
-evidence, not a universal promise; savings vary with command, output, and
-response style.
+Tool-output path: **307 raw tokens → 16 RTK/model-visible tokens**.
+PostToolUse's 9-token candidate and concise stage notice are not injected into
+the model. The measured operation is 88.0% smaller. This fixture is evidence,
+not a universal promise; savings vary with command, output, and response style.
+
+Fixed activation context is also measured, rather than hidden:
+
+| Activation component | Tokens |
+| --- | ---: |
+| Default `SKILL.md` | 323 |
+| SessionStart mode state | 20 |
+| **Total fixed context** | **343** |
+
+The optional 247-token mode-settings reference is loaded only when the user
+asks to change, explain, save, or reset a mode. Repeating the same synthetic
+operation after one activation gives:
+
+| Operations | Before | After including fixed context | Saved |
+| ---: | ---: | ---: | ---: |
+| 1 | 409 | 392 | 17 (4.2%) |
+| 2 | 818 | 441 | 377 (46.1%) |
+| 5 | 2,045 | 588 | 1,457 (71.2%) |
+
+This is transcript/context accounting, not a billing promise; provider prompt
+caching and the number of model continuations affect billed input separately.
 
 Reproduce both token counts and byte-for-byte runtime behavior:
 

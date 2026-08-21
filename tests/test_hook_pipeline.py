@@ -29,6 +29,9 @@ class HookManifestContractTests(unittest.TestCase):
         self.assertIn("PostToolUse", hooks)
         self.assertEqual(hooks["PreToolUse"][0]["matcher"], "Bash")
         self.assertEqual(hooks["PostToolUse"][0]["matcher"], "*")
+        self.assertNotIn(
+            "additionalContextLimit", hooks["PostToolUse"][0]["hooks"][0]
+        )
 
     def test_launcher_survives_a_deleted_session_cache_root(self) -> None:
         hooks = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))["hooks"]
@@ -52,7 +55,7 @@ class HookManifestContractTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         response = json.loads(result.stdout)
-        self.assertIn("hooks active", response["systemMessage"])
+        self.assertEqual(response["systemMessage"], "[codex-optimizer] active")
 
 
 class MetricsTests(unittest.TestCase):
@@ -75,8 +78,39 @@ class MetricsTests(unittest.TestCase):
                     os.environ["PLUGIN_DATA"] = previous
 
         self.assertEqual(metrics["events"], 1)
-        self.assertEqual(metrics["context_delta_chars"], 60)
+        self.assertEqual(metrics["candidate_reduction_chars"], 60)
+        self.assertEqual(metrics["estimated_candidate_reduction_tokens"], 15)
         self.assertEqual(metrics["stages"]["Git Compaction"], 1)
+
+    def test_legacy_context_metrics_are_migrated_as_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            data = Path(temporary)
+            (data / "metrics.json").write_text(
+                json.dumps(
+                    {
+                        "events": 2,
+                        "source_chars": 300,
+                        "compact_context_chars": 100,
+                        "context_delta_chars": 200,
+                        "estimated_context_delta_tokens": 50,
+                        "stages": {"Git Compaction": 2},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            previous = os.environ.get("PLUGIN_DATA")
+            os.environ["PLUGIN_DATA"] = temporary
+            try:
+                metrics = load_metrics()
+            finally:
+                if previous is None:
+                    os.environ.pop("PLUGIN_DATA", None)
+                else:
+                    os.environ["PLUGIN_DATA"] = previous
+
+        self.assertEqual(metrics["candidate_chars"], 100)
+        self.assertEqual(metrics["candidate_reduction_chars"], 200)
+        self.assertEqual(metrics["estimated_candidate_reduction_tokens"], 50)
 
 
 class CompactionStageTests(unittest.TestCase):
@@ -248,7 +282,7 @@ class RuntimeHookTests(unittest.TestCase):
             env=environment,
         )
 
-    def test_pre_tool_use_rewrites_and_announces_rtk(self) -> None:
+    def test_pre_tool_use_rewrites_without_repeating_the_command(self) -> None:
         result = self.run_hook(
             "pre-tool-use",
             {"tool_name": "Bash", "tool_input": {"command": "git status"}},
@@ -256,9 +290,16 @@ class RuntimeHookTests(unittest.TestCase):
         )
         response = json.loads(result.stdout)
 
-        self.assertEqual(response["hookSpecificOutput"]["updatedInput"]["command"], "rtk git status --short")
-        self.assertIn("RTK rewrite", response["systemMessage"])
-        self.assertIn("RTK rewrite", response["hookSpecificOutput"]["additionalContext"])
+        self.assertEqual(
+            response,
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "allow",
+                    "updatedInput": {"command": "rtk git status --short"},
+                }
+            },
+        )
 
     def test_pre_tool_use_never_delegates_sudo(self) -> None:
         result = self.run_hook(
@@ -276,7 +317,7 @@ class RuntimeHookTests(unittest.TestCase):
         )
         self.assertEqual(result.stdout, "")
 
-    def test_post_tool_use_adds_compact_context_without_stopping(self) -> None:
+    def test_post_tool_use_reports_stages_without_adding_model_context(self) -> None:
         raw = "\x1b[32m" + "\n".join(f"case_{index} PASSED" for index in range(30))
         raw += "\n30 passed in 1.0s\x1b[0m"
         result = self.run_hook(
@@ -293,31 +334,19 @@ class RuntimeHookTests(unittest.TestCase):
         self.assertNotEqual(response.get("decision"), "block")
         self.assertIn("ANSI Stripping", response["systemMessage"])
         self.assertIn("Test Aggregation", response["systemMessage"])
-        context = response["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("[codex-optimizer compact context; original tool result preserved]", context)
-        self.assertIn("30 passed", context)
+        self.assertNotIn("hookSpecificOutput", response)
+        self.assertNotIn("additionalContext", json.dumps(response))
 
-    def test_session_start_reports_active_modes_and_all_stages(self) -> None:
+    def test_session_start_injects_only_compact_mode_state(self) -> None:
         result = self.run_hook("session-start", {"session_id": "test"})
         response = json.loads(result.stdout)
         context = response["hookSpecificOutput"]["additionalContext"]
 
-        self.assertIn("codex-optimizer hooks active", context)
-        self.assertIn("Caveman=full", context)
-        self.assertIn("RTK=on", context)
-        for stage in (
-            "ANSI Stripping",
-            "Test Aggregation",
-            "Build Filtering",
-            "Git Compaction",
-            "Linter Aggregation",
-            "Search Grouping",
-            "Source Code Filtering",
-            "Smart Truncation",
-            "Anchor-Safe Read Compaction",
-            "Hard Truncation",
-        ):
-            self.assertIn(stage, context)
+        self.assertEqual(
+            context,
+            "codex-optimizer: caveman=full; ponytail=full; rtk=on.",
+        )
+        self.assertEqual(response["systemMessage"], "[codex-optimizer] active")
 
 
 if __name__ == "__main__":
