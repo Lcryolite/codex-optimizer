@@ -4,7 +4,7 @@
 
 Codex Optimizer 是一个基于真实 Codex hooks 的自动优化插件：由 RTK 静默改写受支持的
 shell 命令，在不注入重复模型上下文的前提下分析压缩候选，并减少回复冗余。本仓库还通过
-Git submodule 固定并发布完整的上游 Ponytail 插件。
+按需 Codex wrapper 发布完整上游 Ponytail skills，其源码由 Git submodule 固定。
 
 ## “自动”是运行时自动
 
@@ -28,6 +28,9 @@ rtk git status
 会话启动时只向模型注入两个有效模式值，不再重复十个阶段名称。不支持的命令或不能产生
 更小候选的输出保持静默。
 
+Ponytail 默认 `full` 的 SessionStart 同样静默。Codex 只在编码任务加载上游 skill；非编码
+会话不接收 Ponytail 规则。非默认 `off`、`lite`、`ultra` 只注入简短模式状态。
+
 Codex 目前没有“静默替换任意 PostToolUse 结果”的受支持字段。返回
 `continue: false` 虽能替换结果，但会把 hook 标记为 `(stopped)`。本插件明确不再这样做：
 RTK 在 Bash 输出进入 Codex 前完成真实缩减；PostToolUse 保留原始结果、记录候选指标，但
@@ -41,8 +44,9 @@ RTK 在 Bash 输出进入 Codex 前完成真实缩减；PostToolUse 保留原始
 | Caveman | `full` | 删除客套、模糊措辞、重复和填充语，保留全部技术内容；安全与不可逆操作临时优先清晰表达。 |
 | RTK | `on` | 通过静默 `PreToolUse` 改写和零模型上下文的 `PostToolUse` 分析运行。 |
 
-Ponytail 不再作为 Codex Optimizer 内部的不完整模式存在。本 marketplace 发布未经复制的
-上游插件，因此会安装其完整 skill 与生命周期 hooks；配置和版本也由上游独立维护。
+Ponytail 不再作为 Codex Optimizer 内部的不完整模式存在。wrapper 将固定版本的全部上游
+skills 逐字节镜像到 Codex 要求的顶层 `skills/` 目录，并以静默模式状态 hooks 替换无条件
+全量规则注入；配置和上游版本仍独立维护。
 
 ## 全部输出阶段
 
@@ -103,16 +107,17 @@ git submodule update --init --recursive
 
 ## 更新 Ponytail
 
-仓库固定到一个经过审查的上游 commit。更新时只移动 submodule gitlink：
+仓库固定到一个经过审查的上游 commit。更新时移动 submodule gitlink 并同步可安装镜像：
 
 ```bash
-git submodule update --remote plugins/ponytail
-git diff --submodule=log -- plugins/ponytail
+git submodule update --remote plugins/ponytail/upstream
+git diff --submodule=log -- plugins/ponytail/upstream
+python3 plugins/ponytail/scripts/sync_upstream_skills.py
 git add plugins/ponytail
 ```
 
-随后验证两个插件并提交。Ponytail 源码没有复制进 Codex Optimizer，因此更新可通过普通
-Git 历史审计和回退。
+Codex 插件打包器不会保留目录 symlink，因此必须保留这份精确镜像。契约测试会逐字节比较
+镜像与固定 submodule，更新仍可通过普通 Git 历史审计和回退。
 
 ## 检查是否启动及实际节省
 
@@ -153,12 +158,12 @@ python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py r
 | 基线 | 243 | 87 | 15 | 307 | 652 | — | 0 | 652 |
 | 仅 RTK | 243 | 87 | 17 | 16 | 363 | 289（44.3%） | 414 | 777 |
 | 仅 Caveman | 243 | 16 | 15 | 307 | 581 | 71（10.9%） | 414 | 995 |
-| 仅 Ponytail | 40 | 87 | 15 | 307 | 449 | 203（31.1%） | 2,874 | 3,323 |
-| 三者合并 | 40 | 16 | 17 | 16 | 89 | 563（86.3%） | 3,288 | 3,377 |
+| 仅 Ponytail | 40 | 87 | 15 | 307 | 449 | 203（31.1%） | 1,610 | 2,059 |
+| 三者合并 | 40 | 16 | 17 | 16 | 89 | 563（86.3%） | 2,024 | 2,113 |
 
 四个优化测试臂都减少了本 fixture 的操作文本；计入完整激活上下文后，首次会话都没有节省。
 假定以后每次仍有同样的操作差值、激活只支付一次，则 RTK 第 2 次回本，Caveman 第 6 次，
-Ponytail 第 15 次，合并第 6 次。真实任务的节省不会恒定。
+Ponytail 第 8 次，合并第 4 次。真实任务的节省不会恒定。
 
 Caveman 与 Ponytail 是模型指令，不是确定性转换器；它们的输出在计数前固定。因此数据只
 证明这些具体产物，不代表平均模型遵循率或生产环境收益。完整方法与命令见
@@ -260,20 +265,21 @@ Tests pass: 20/20 in 1 suite; 0 failures.
 | Codex Optimizer `SKILL.md` | 399 |
 | Codex Optimizer SessionStart 状态 | 15 |
 | 上游 Ponytail `SKILL.md` | 1,610 |
-| 上游 Ponytail `full` SessionStart 规则 | 1,264 |
-| **两个已安装插件合计** | **3,288** |
+| 按需 Ponytail `full` SessionStart | 0 |
+| **编码时两个插件合计** | **2,024** |
+| **非编码时 Ponytail 规则** | **0** |
 
 218-token 的可选模式设置 reference 仅在用户要求修改、解释、保存或重置 Codex Optimizer
-模式时加载。Ponytail SessionStart 一行通过带 `PLUGIN_DATA` 实际执行固定版本的上游 hook
-得出，因此 Codex 输出不含仅面向 Claude 的 statusline 提示。两个插件激活后重复执行同一
-fixture：
+模式时加载。Ponytail SessionStart 一行通过带 `PLUGIN_DATA` 实际执行 wrapper hook，并强制
+上游 `full` 默认值得出。两个插件激活后重复执行同一编码 fixture：
 
 | 操作次数 | 压缩前 | 含固定上下文的压缩后 | 节省 |
 | ---: | ---: | ---: | ---: |
-| 1 | 409 | 3,337 | -2,928（-715.9%） |
-| 2 | 818 | 3,386 | -2,568（-313.9%） |
-| 5 | 2,045 | 3,533 | -1,488（-72.8%） |
-| 10 | 4,090 | 3,778 | 312（7.6%） |
+| 1 | 409 | 2,073 | -1,664（-406.8%） |
+| 2 | 818 | 2,122 | -1,304（-159.4%） |
+| 5 | 2,045 | 2,269 | -224（-11.0%） |
+| 6 | 2,454 | 2,318 | 136（5.5%） |
+| 10 | 4,090 | 2,514 | 1,576（38.5%） |
 
 这是 transcript/上下文核算，不是账单承诺；provider prompt caching 和模型 continuation
 次数会另外影响实际计费输入。
@@ -309,4 +315,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 
 MIT，详见 [LICENSE](../plugins/codex-optimizer/LICENSE) 和
 [NOTICE](../plugins/codex-optimizer/NOTICE.md)。Ponytail 作为独立 MIT 子模块发布，详见其
-[许可证](../plugins/ponytail/LICENSE)。
+[许可证](../plugins/ponytail/upstream/LICENSE)。

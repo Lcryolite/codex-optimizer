@@ -10,9 +10,10 @@ Hook-backed Codex plugin with two automatic modes:
 - RTK `on`: silent `PreToolUse` command rewriting plus token-neutral
   and silent `PostToolUse` stage analysis.
 
-The repository marketplace also includes the upstream Ponytail plugin as an
-independent Git submodule. Its own hooks and complete rule set remain under
-upstream ownership and can be updated by moving the pinned submodule commit.
+The repository marketplace also includes an on-demand Ponytail wrapper. Its
+complete rules are mirrored byte-for-byte from a pinned upstream Git
+submodule; default full SessionStart is silent and Codex loads the skill only
+for coding tasks.
 
 ## Install
 

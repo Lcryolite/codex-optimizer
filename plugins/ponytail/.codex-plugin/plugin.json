@@ -1,0 +1,36 @@
+{
+  "name": "ponytail",
+  "version": "4.9.0+codex.20260821065756",
+  "description": "Load the complete upstream Ponytail skills only for coding tasks, without unconditional full-rules SessionStart injection.",
+  "author": {
+    "name": "Dietrich Gebert; Codex wrapper by Lcryolite",
+    "url": "https://github.com/Lcryolite/codex-optimizer"
+  },
+  "homepage": "https://github.com/Lcryolite/codex-optimizer",
+  "repository": "https://github.com/Lcryolite/codex-optimizer",
+  "license": "MIT",
+  "keywords": [
+    "yagni",
+    "minimalism",
+    "code-review",
+    "on-demand",
+    "productivity"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Ponytail",
+    "shortDescription": "On-demand lazy senior developer mode.",
+    "longDescription": "Exposes the complete upstream Ponytail skills and lets Codex load them for coding tasks, while keeping default SessionStart activation silent.",
+    "developerName": "Dietrich Gebert; Codex wrapper by Lcryolite",
+    "category": "Productivity",
+    "capabilities": [
+      "Skills",
+      "Hooks"
+    ],
+    "websiteURL": "https://github.com/DietrichGebert/ponytail",
+    "defaultPrompt": "Use Ponytail for this coding task.",
+    "brandColor": "#111111",
+    "composerIcon": "./upstream/assets/logo.png",
+    "logo": "./upstream/assets/logo.png"
+  }
+}

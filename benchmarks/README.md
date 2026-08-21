@@ -33,6 +33,11 @@ totals, and the repeated-operation break-even point. Counts use `o200k_base`;
 the benchmark subprocess forces `PONYTAIL_DEFAULT_MODE=full` so user settings
 cannot change the fixture.
 
+The repository's Ponytail wrapper keeps that default SessionStart hook silent.
+Its full upstream skill is counted only in coding arms; the marginal Ponytail
+rules cost for non-coding arms is zero. Global skill-catalog metadata remains
+outside the comparison.
+
 ## Interpretation limits
 
 - RTK is an executable transformation and receives byte-for-byte runtime

@@ -57,7 +57,13 @@ def activation_tokens(encoder, transcript: dict[str, object]) -> dict[str, int]:
         / "SKILL.md"
     ).read_text(encoding="utf-8")
     ponytail_skill = (
-        REPO_ROOT / "plugins" / "ponytail" / "skills" / "ponytail" / "SKILL.md"
+        REPO_ROOT
+        / "plugins"
+        / "ponytail"
+        / "upstream"
+        / "skills"
+        / "ponytail"
+        / "SKILL.md"
     ).read_text(encoding="utf-8")
     ponytail_context = load_ponytail_context(REPO_ROOT)
     optimizer_skill_tokens = count(encoder, optimizer_skill)

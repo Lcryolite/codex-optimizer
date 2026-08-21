@@ -1,6 +1,6 @@
 {
   "name": "codex-optimizer",
-  "version": "0.2.0+codex.20260821061944",
+  "version": "0.2.0+codex.20260821065502",
   "description": "Silently rewrite supported shell commands with RTK, analyze output-compaction candidates without duplicate model context, and keep responses concise.",
   "author": {
     "name": "Lcryolite",

@@ -3,7 +3,8 @@
 A hook-backed Codex plugin that silently rewrites supported shell commands
 through RTK, analyzes compaction candidates without injecting duplicate model
 context, and keeps responses concise. This repository also distributes the
-upstream Ponytail plugin as a pinned Git submodule.
+complete upstream Ponytail skills through an on-demand Codex wrapper backed by
+a pinned Git submodule.
 
 [中文文档 / Chinese documentation](docs/README.zh-CN.md)
 
@@ -32,6 +33,11 @@ At session start the model receives only the two effective mode values; the
 ten-stage list is not repeated into every conversation. Unsupported commands
 and outputs that do not produce a smaller candidate remain silent.
 
+Ponytail's default `full` SessionStart hook is also silent. Codex loads its
+upstream skill only for coding tasks; non-coding conversations receive no
+Ponytail rules. Non-default `off`, `lite`, and `ultra` modes inject only a
+compact state instruction.
+
 Codex currently has no supported PostToolUse field that silently replaces an
 arbitrary tool result. Returning `continue: false` performs replacement but
 marks the hook as `(stopped)`. Codex Optimizer deliberately does not do that:
@@ -50,10 +56,11 @@ Codex Optimizer enables these modes by default:
 | Caveman | `full` | Removes filler, hedging, repetition, and pleasantries while preserving all technical content; temporarily favors clarity for safety and irreversible actions. |
 | RTK | `on` | Uses a silent `PreToolUse` rewrite and token-neutral `PostToolUse` analysis. |
 
-Ponytail is the unmodified upstream plugin, not a partial mode reimplemented
-inside Codex Optimizer. Installing it from this marketplace provides its
-complete skills and lifecycle hooks. Its configuration and releases remain
-independent.
+Ponytail rules remain byte-identical upstream content, not a partial mode
+reimplemented inside Codex Optimizer. The local wrapper mirrors all pinned
+upstream skills into Codex's required top-level `skills/` directory, then
+replaces unconditional full-rules lifecycle injection with silent mode-state
+hooks. Configuration and upstream releases remain independent.
 
 ## Output stages
 
@@ -128,13 +135,15 @@ pin, fetch the latest configured upstream branch, validate both plugins, and
 commit the resulting gitlink change:
 
 ```bash
-git submodule update --remote plugins/ponytail
-git diff --submodule=log -- plugins/ponytail
+git submodule update --remote plugins/ponytail/upstream
+git diff --submodule=log -- plugins/ponytail/upstream
+python3 plugins/ponytail/scripts/sync_upstream_skills.py
 git add plugins/ponytail
 ```
 
-No Ponytail source is copied into Codex Optimizer, so upstream updates stay
-auditable and reversible through normal Git history.
+The sync creates an exact installable mirror because Codex's plugin packager
+does not retain directory symlinks. Contract tests compare every mirrored byte
+with the pinned submodule, so upstream updates stay auditable and reversible.
 
 ## Verify activation and savings
 
@@ -184,13 +193,13 @@ runtime verification.
 | Baseline | 243 | 87 | 15 | 307 | 652 | — | 0 | 652 |
 | RTK only | 243 | 87 | 17 | 16 | 363 | 289 (44.3%) | 414 | 777 |
 | Caveman only | 243 | 16 | 15 | 307 | 581 | 71 (10.9%) | 414 | 995 |
-| Ponytail only | 40 | 87 | 15 | 307 | 449 | 203 (31.1%) | 2,874 | 3,323 |
-| Combined | 40 | 16 | 17 | 16 | 89 | 563 (86.3%) | 3,288 | 3,377 |
+| Ponytail only | 40 | 87 | 15 | 307 | 449 | 203 (31.1%) | 1,610 | 2,059 |
+| Combined | 40 | 16 | 17 | 16 | 89 | 563 (86.3%) | 2,024 | 2,113 |
 
 Every optimizer reduces this fixture's operation text. None saves tokens on
 the first session after its full activation context is included. If the same
 per-operation difference repeats while activation is paid once, RTK breaks
-even at operation 2, Caveman at 6, Ponytail at 15, and the combined arm at 6.
+even at operation 2, Caveman at 6, Ponytail at 8, and the combined arm at 4.
 Real tasks do not have constant savings.
 
 Caveman and Ponytail are model instructions rather than deterministic
@@ -295,22 +304,23 @@ Fixed activation context is also measured, rather than hidden:
 | Codex Optimizer `SKILL.md` | 399 |
 | Codex Optimizer SessionStart state | 15 |
 | Upstream Ponytail `SKILL.md` | 1,610 |
-| Upstream Ponytail `full` SessionStart rules | 1,264 |
-| **Both installed plugins** | **3,288** |
+| On-demand Ponytail `full` SessionStart | 0 |
+| **Both plugins during coding** | **2,024** |
+| **Ponytail rules during non-coding** | **0** |
 
 The optional 218-token mode-settings reference is loaded only when the user
 asks to change, explain, save, or reset a Codex Optimizer mode. The Ponytail
-SessionStart row is measured by executing the pinned upstream hook with
-`PLUGIN_DATA`, so Codex-specific output excludes its Claude-only statusline
-nudge. Repeating the same synthetic operation after both plugins activate
-gives:
+SessionStart row is measured by executing the wrapper hook with `PLUGIN_DATA`
+and forcing the upstream `full` default. Repeating the same synthetic coding
+operation after both plugins activate gives:
 
 | Operations | Before | After including fixed context | Saved |
 | ---: | ---: | ---: | ---: |
-| 1 | 409 | 3,337 | -2,928 (-715.9%) |
-| 2 | 818 | 3,386 | -2,568 (-313.9%) |
-| 5 | 2,045 | 3,533 | -1,488 (-72.8%) |
-| 10 | 4,090 | 3,778 | 312 (7.6%) |
+| 1 | 409 | 2,073 | -1,664 (-406.8%) |
+| 2 | 818 | 2,122 | -1,304 (-159.4%) |
+| 5 | 2,045 | 2,269 | -224 (-11.0%) |
+| 6 | 2,454 | 2,318 | 136 (5.5%) |
+| 10 | 4,090 | 2,514 | 1,576 (38.5%) |
 
 This is transcript/context accounting, not a billing promise; provider prompt
 caching and the number of model continuations affect billed input separately.
@@ -348,4 +358,4 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 MIT. See [LICENSE](plugins/codex-optimizer/LICENSE) and
 [NOTICE](plugins/codex-optimizer/NOTICE.md). Ponytail is distributed as an
 independent MIT-licensed submodule; see its
-[license](plugins/ponytail/LICENSE).
+[license](plugins/ponytail/upstream/LICENSE).

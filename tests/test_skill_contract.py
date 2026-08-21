@@ -24,6 +24,9 @@ CONFIG = SKILL.parent / "scripts" / "codex_config.py"
 HOOK = PLUGIN / "hooks" / "codex_optimizer_hook.py"
 MARKETPLACE = ROOT / ".agents" / "plugins" / "marketplace.json"
 PONYTAIL = ROOT / "plugins" / "ponytail"
+PONYTAIL_UPSTREAM = PONYTAIL / "upstream"
+PONYTAIL_STATE_HOOK = PONYTAIL / "hooks" / "ponytail-mode-state.js"
+PONYTAIL_HOOKS = PONYTAIL / "hooks" / "hooks.json"
 
 
 class PersistentDefaultsContractTests(unittest.TestCase):
@@ -40,10 +43,92 @@ class PersistentDefaultsContractTests(unittest.TestCase):
         )
         self.assertEqual(ponytail_manifest["name"], "ponytail")
         self.assertEqual(ponytail_manifest["skills"], "./skills/")
-        self.assertEqual(ponytail_manifest["hooks"], "./hooks/claude-codex-hooks.json")
-        self.assertTrue((PONYTAIL / "skills" / "ponytail" / "SKILL.md").is_file())
-        self.assertTrue((PONYTAIL / "skills" / "ponytail-review" / "SKILL.md").is_file())
-        self.assertTrue((PONYTAIL / "hooks" / "ponytail-activate.js").is_file())
+        self.assertNotIn("hooks", ponytail_manifest)
+        upstream_skills = {
+            path.relative_to(PONYTAIL_UPSTREAM / "skills"): path.read_bytes()
+            for path in (PONYTAIL_UPSTREAM / "skills").rglob("*")
+            if path.is_file()
+        }
+        installable_skills = {
+            path.relative_to(PONYTAIL / "skills"): path.read_bytes()
+            for path in (PONYTAIL / "skills").rglob("*")
+            if path.is_file()
+        }
+        self.assertEqual(installable_skills, upstream_skills)
+        self.assertTrue(
+            (PONYTAIL_UPSTREAM / "skills" / "ponytail" / "SKILL.md").is_file()
+        )
+        self.assertTrue(
+            (PONYTAIL_UPSTREAM / "skills" / "ponytail-review" / "SKILL.md").is_file()
+        )
+        self.assertTrue(
+            (PONYTAIL_UPSTREAM / "hooks" / "ponytail-mode-tracker.js").is_file()
+        )
+
+    def run_ponytail_state_hook(
+        self, mode: str, event: str = "SessionStart"
+    ) -> tuple[subprocess.CompletedProcess[str], str | None]:
+        with tempfile.TemporaryDirectory() as temporary:
+            environment = os.environ.copy()
+            environment["CLAUDE_PLUGIN_ROOT"] = str(PONYTAIL)
+            environment["PLUGIN_DATA"] = temporary
+            environment["PONYTAIL_DEFAULT_MODE"] = mode
+            result = subprocess.run(
+                ["node", str(PONYTAIL_STATE_HOOK), event],
+                input=json.dumps({"source": "startup"}),
+                capture_output=True,
+                text=True,
+                check=False,
+                env=environment,
+            )
+            state = Path(temporary, ".ponytail-active")
+            saved = state.read_text(encoding="utf-8") if state.exists() else None
+        return result, saved
+
+    def test_default_full_ponytail_lifecycle_hooks_are_silent(self) -> None:
+        for event in ("SessionStart", "SubagentStart"):
+            with self.subTest(event=event):
+                result, saved = self.run_ponytail_state_hook("full", event)
+
+                self.assertEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(result.stderr, "")
+                self.assertEqual(saved, "full")
+
+    def test_nondefault_ponytail_mode_emits_only_compact_state(self) -> None:
+        for mode in ("off", "lite", "ultra"):
+            with self.subTest(mode=mode):
+                result, saved = self.run_ponytail_state_hook(mode)
+                response = json.loads(result.stdout)
+                context = response["hookSpecificOutput"]["additionalContext"]
+
+                self.assertEqual(result.returncode, 0)
+                self.assertEqual(
+                    response["hookSpecificOutput"]["hookEventName"], "SessionStart"
+                )
+                self.assertLess(len(context), 120)
+                self.assertNotIn("## The ladder", context)
+                self.assertEqual(saved, None if mode == "off" else mode)
+
+    def test_wrapper_never_runs_upstream_full_rules_activation_hooks(self) -> None:
+        hooks_text = PONYTAIL_HOOKS.read_text(encoding="utf-8")
+        hooks = json.loads(hooks_text)["hooks"]
+
+        self.assertIn("SessionStart", hooks)
+        self.assertIn("SubagentStart", hooks)
+        self.assertIn("UserPromptSubmit", hooks)
+        self.assertNotIn("ponytail-activate.js", hooks_text)
+        self.assertNotIn("ponytail-subagent.js", hooks_text)
+        self.assertIn("ponytail-mode-tracker.js", hooks_text)
+
+    def test_upstream_main_skill_routes_only_coding_tasks(self) -> None:
+        text = (
+            PONYTAIL_UPSTREAM / "skills" / "ponytail" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        normalized = " ".join(text.split())
+
+        self.assertIn("Use on ANY coding task", normalized)
+        self.assertIn("Do NOT use for non-coding requests", normalized)
 
     def test_codex_optimizer_does_not_shadow_upstream_ponytail_rules(self) -> None:
         own_skill = SKILL.read_text(encoding="utf-8")

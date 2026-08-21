@@ -38,7 +38,7 @@ def count(encoder, text: str) -> int:
 
 def load_ponytail_context(repo_root: Path) -> str:
     plugin = repo_root / "plugins" / "ponytail"
-    hook = plugin / "hooks" / "ponytail-activate.js"
+    hook = plugin / "hooks" / "ponytail-mode-state.js"
     environment = os.environ.copy()
     environment["CLAUDE_PLUGIN_ROOT"] = str(plugin)
     environment["PONYTAIL_DEFAULT_MODE"] = "full"
@@ -46,7 +46,8 @@ def load_ponytail_context(repo_root: Path) -> str:
         environment["PLUGIN_DATA"] = temporary
         try:
             result = subprocess.run(
-                ["node", str(hook)],
+                ["node", str(hook), "SessionStart"],
+                input=json.dumps({"source": "startup"}),
                 capture_output=True,
                 text=True,
                 check=False,
@@ -54,11 +55,13 @@ def load_ponytail_context(repo_root: Path) -> str:
             )
         except FileNotFoundError as exc:
             raise SystemExit("node is required to measure the Ponytail hook") from exc
-    if result.returncode != 0 or result.stderr or not result.stdout:
+    if result.returncode != 0 or result.stderr:
         raise SystemExit(
             "Ponytail SessionStart hook failed during benchmark\n"
             f"exit={result.returncode}\nstderr={result.stderr!r}"
         )
+    if not result.stdout:
+        return ""
     response = json.loads(result.stdout)
     return response["hookSpecificOutput"]["additionalContext"]
 
@@ -130,7 +133,13 @@ def print_combined_benchmark(encoder, data_path: Path) -> None:
     session_tokens = count(encoder, transcript["runtime"]["session_context"])
     ponytail_context = load_ponytail_context(repo_root)
     ponytail_skill_text = (
-        repo_root / "plugins" / "ponytail" / "skills" / "ponytail" / "SKILL.md"
+        repo_root
+        / "plugins"
+        / "ponytail"
+        / "upstream"
+        / "skills"
+        / "ponytail"
+        / "SKILL.md"
     ).read_text(encoding="utf-8")
     ponytail_skill_tokens = count(encoder, ponytail_skill_text)
     ponytail_context_tokens = count(encoder, ponytail_context)
@@ -147,7 +156,7 @@ def print_combined_benchmark(encoder, data_path: Path) -> None:
         f"= {fixed_tokens} tokens"
     )
     print("repeated fixture including both plugins' activation context")
-    for operations in (1, 2, 5, 10):
+    for operations in (1, 2, 5, 6, 10):
         activated_before = before_total * operations
         activated_after = fixed_tokens + after_total * operations
         activated_saved = activated_before - activated_after

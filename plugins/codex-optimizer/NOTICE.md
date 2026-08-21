@@ -5,7 +5,8 @@ The output-compaction behavior was informed by the MIT-licensed
 project. Codex Optimizer is an independent Python implementation for Codex
 hooks and retains the MIT license.
 
-The repository marketplace also exposes
-[`DietrichGebert/ponytail`](https://github.com/DietrichGebert/ponytail) as an
-independent MIT-licensed Git submodule. It is not copied into or maintained as
-part of the Codex Optimizer plugin.
+The repository marketplace also exposes the complete MIT-licensed
+[`DietrichGebert/ponytail`](https://github.com/DietrichGebert/ponytail) skills
+through a Codex-specific on-demand wrapper. Upstream source remains a pinned
+Git submodule; the installable `skills/` directory is an unmodified mirror of
+that pinned source.
