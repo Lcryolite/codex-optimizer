@@ -170,6 +170,36 @@ mode context are excluded from the operation-only table and reported
 separately below. This deterministic synthetic fixture makes byte-for-byte
 runtime verification independent of compiler versions or timing.
 
+### Baseline + four optimization arms
+
+The fixed isolation fixture applies each optimizer only to its owned artifact:
+RTK changes command/output, Caveman changes prose, and Ponytail changes
+implementation. The table contains a baseline, three single-optimizer arms,
+and the full combination. Both implementations pass the same valid/invalid
+input contract; the real RTK hook and output fixture receive byte-for-byte
+runtime verification.
+
+| Arm | Implementation | Reply | Command | Output | Operation | Saved | Activation | First session |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Baseline | 243 | 87 | 15 | 307 | 652 | — | 0 | 652 |
+| RTK only | 243 | 87 | 17 | 16 | 363 | 289 (44.3%) | 414 | 777 |
+| Caveman only | 243 | 16 | 15 | 307 | 581 | 71 (10.9%) | 414 | 995 |
+| Ponytail only | 40 | 87 | 15 | 307 | 449 | 203 (31.1%) | 2,874 | 3,323 |
+| Combined | 40 | 16 | 17 | 16 | 89 | 563 (86.3%) | 3,288 | 3,377 |
+
+Every optimizer reduces this fixture's operation text. None saves tokens on
+the first session after its full activation context is included. If the same
+per-operation difference repeats while activation is paid once, RTK breaks
+even at operation 2, Caveman at 6, Ponytail at 15, and the combined arm at 6.
+Real tasks do not have constant savings.
+
+Caveman and Ponytail are model instructions rather than deterministic
+transformers. Their outputs were fixed before counting, so this demonstrates
+these artifacts—not average model compliance or production savings. Full
+methodology and commands: [benchmark environment](benchmarks/README.md).
+The identical user task, tool-call framing, hidden reasoning, and global skill
+catalog are excluded from every arm; they cancel in this artifact comparison.
+
 ### Before optimization
 
 Assistant response:
@@ -264,20 +294,23 @@ Fixed activation context is also measured, rather than hidden:
 | --- | ---: |
 | Codex Optimizer `SKILL.md` | 399 |
 | Codex Optimizer SessionStart state | 15 |
+| Upstream Ponytail `SKILL.md` | 1,610 |
 | Upstream Ponytail `full` SessionStart rules | 1,264 |
-| **Both installed plugins** | **1,678** |
+| **Both installed plugins** | **3,288** |
 
 The optional 218-token mode-settings reference is loaded only when the user
 asks to change, explain, save, or reset a Codex Optimizer mode. The Ponytail
-row is measured by executing the pinned upstream hook with `PLUGIN_DATA`, so
-Codex-specific output excludes its Claude-only statusline nudge. Repeating the
-same synthetic operation after both plugins activate gives:
+SessionStart row is measured by executing the pinned upstream hook with
+`PLUGIN_DATA`, so Codex-specific output excludes its Claude-only statusline
+nudge. Repeating the same synthetic operation after both plugins activate
+gives:
 
 | Operations | Before | After including fixed context | Saved |
 | ---: | ---: | ---: | ---: |
-| 1 | 409 | 1,727 | -1,318 (-322.2%) |
-| 2 | 818 | 1,776 | -958 (-117.1%) |
-| 5 | 2,045 | 1,923 | 122 (6.0%) |
+| 1 | 409 | 3,337 | -2,928 (-715.9%) |
+| 2 | 818 | 3,386 | -2,568 (-313.9%) |
+| 5 | 2,045 | 3,533 | -1,488 (-72.8%) |
+| 10 | 4,090 | 3,778 | 312 (7.6%) |
 
 This is transcript/context accounting, not a billing promise; provider prompt
 caching and the number of model continuations affect billed input separately.
@@ -288,6 +321,7 @@ Reproduce both token counts and byte-for-byte runtime behavior:
 python3 -m venv .venv
 .venv/bin/python -m pip install tiktoken==0.14.0
 .venv/bin/python benchmarks/token_savings.py --verify-runtime
+.venv/bin/python benchmarks/optimizer_matrix.py --verify-runtime
 ```
 
 The fixture data is in
@@ -306,6 +340,7 @@ python3 "$CODEX_SYSTEM_SKILLS/skill-creator/scripts/quick_validate.py" \
   plugins/codex-optimizer/skills/codex-optimizer
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 .venv/bin/python benchmarks/token_savings.py --verify-runtime
+.venv/bin/python benchmarks/optimizer_matrix.py --verify-runtime
 ```
 
 ## License and attribution

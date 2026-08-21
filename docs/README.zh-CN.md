@@ -141,6 +141,31 @@ python3 plugins/codex-optimizer/skills/codex-optimizer/scripts/codex_config.py r
 外壳、隐藏推理和每会话一次的模式上下文不计入单次操作表，而是在下方单独报告。fixture
 为确定性合成数据，因此字节级校验不依赖编译器版本或实际耗时。
 
+### 基线 + 四个优化测试臂
+
+固定隔离 fixture 规定每个优化器只能改变自己负责的产物：RTK 改变命令/工具输出，Caveman
+只改变回复文字，Ponytail 只改变实现。表中包括基线、三个单项测试臂和三者合并测试臂。
+两个实现必须通过相同的有效及无效输入契约；真实 RTK hook 与输出 fixture 进行字节级运行
+验证。
+
+| 测试臂 | 实现 | 回复 | 命令 | 输出 | 操作本体 | 节省 | 激活成本 | 首次会话 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 基线 | 243 | 87 | 15 | 307 | 652 | — | 0 | 652 |
+| 仅 RTK | 243 | 87 | 17 | 16 | 363 | 289（44.3%） | 414 | 777 |
+| 仅 Caveman | 243 | 16 | 15 | 307 | 581 | 71（10.9%） | 414 | 995 |
+| 仅 Ponytail | 40 | 87 | 15 | 307 | 449 | 203（31.1%） | 2,874 | 3,323 |
+| 三者合并 | 40 | 16 | 17 | 16 | 89 | 563（86.3%） | 3,288 | 3,377 |
+
+四个优化测试臂都减少了本 fixture 的操作文本；计入完整激活上下文后，首次会话都没有节省。
+假定以后每次仍有同样的操作差值、激活只支付一次，则 RTK 第 2 次回本，Caveman 第 6 次，
+Ponytail 第 15 次，合并第 6 次。真实任务的节省不会恒定。
+
+Caveman 与 Ponytail 是模型指令，不是确定性转换器；它们的输出在计数前固定。因此数据只
+证明这些具体产物，不代表平均模型遵循率或生产环境收益。完整方法与命令见
+[benchmark 环境](../benchmarks/README.md)。
+各臂完全相同的用户任务、tool-call 外壳、隐藏推理和全局 skill catalog 均不计入；这些部分
+在本次产物比较中相消。
+
 ### 压缩前
 
 Assistant 回复：
@@ -234,18 +259,21 @@ Tests pass: 20/20 in 1 suite; 0 failures.
 | --- | ---: |
 | Codex Optimizer `SKILL.md` | 399 |
 | Codex Optimizer SessionStart 状态 | 15 |
+| 上游 Ponytail `SKILL.md` | 1,610 |
 | 上游 Ponytail `full` SessionStart 规则 | 1,264 |
-| **两个已安装插件合计** | **1,678** |
+| **两个已安装插件合计** | **3,288** |
 
 218-token 的可选模式设置 reference 仅在用户要求修改、解释、保存或重置 Codex Optimizer
-模式时加载。Ponytail 一行通过带 `PLUGIN_DATA` 实际执行固定版本的上游 hook 得出，因此
-Codex 输出不含仅面向 Claude 的 statusline 提示。两个插件激活后重复执行同一 fixture：
+模式时加载。Ponytail SessionStart 一行通过带 `PLUGIN_DATA` 实际执行固定版本的上游 hook
+得出，因此 Codex 输出不含仅面向 Claude 的 statusline 提示。两个插件激活后重复执行同一
+fixture：
 
 | 操作次数 | 压缩前 | 含固定上下文的压缩后 | 节省 |
 | ---: | ---: | ---: | ---: |
-| 1 | 409 | 1,727 | -1,318（-322.2%） |
-| 2 | 818 | 1,776 | -958（-117.1%） |
-| 5 | 2,045 | 1,923 | 122（6.0%） |
+| 1 | 409 | 3,337 | -2,928（-715.9%） |
+| 2 | 818 | 3,386 | -2,568（-313.9%） |
+| 5 | 2,045 | 3,533 | -1,488（-72.8%） |
+| 10 | 4,090 | 3,778 | 312（7.6%） |
 
 这是 transcript/上下文核算，不是账单承诺；provider prompt caching 和模型 continuation
 次数会另外影响实际计费输入。
@@ -256,6 +284,7 @@ Codex 输出不含仅面向 Claude 的 statusline 提示。两个插件激活后
 python3 -m venv .venv
 .venv/bin/python -m pip install tiktoken==0.14.0
 .venv/bin/python benchmarks/token_savings.py --verify-runtime
+.venv/bin/python benchmarks/optimizer_matrix.py --verify-runtime
 ```
 
 完整数据：
@@ -273,6 +302,7 @@ python3 "$CODEX_SYSTEM_SKILLS/skill-creator/scripts/quick_validate.py" \
   plugins/codex-optimizer/skills/codex-optimizer
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 .venv/bin/python benchmarks/token_savings.py --verify-runtime
+.venv/bin/python benchmarks/optimizer_matrix.py --verify-runtime
 ```
 
 ## 许可证与致谢

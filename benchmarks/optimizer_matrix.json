@@ -1,0 +1,17 @@
+{
+  "id": "rtk-caveman-ponytail-isolation-matrix",
+  "task": "Implement resolve_port(value: str | None) -> int. Use 8080 when value is absent, parse decimal strings, clamp the result to 1..65535, and preserve ValueError for invalid input. Then run the deterministic 20-test fixture and report the result.",
+  "methodology": "Fixed synthetic isolation fixture. Every arm uses the same task. RTK changes only command and tool output; Caveman changes only the prose response; Ponytail changes only the implementation. Both implementations execute against the same contract cases. This measures these exact artifacts, not average model behavior or causal production savings.",
+  "baseline_implementation": "from __future__ import annotations\n\nDEFAULT_PORT = 8080\nMINIMUM_PORT = 1\nMAXIMUM_PORT = 65_535\n\n\nclass PortBounds:\n    def __init__(self, minimum: int, maximum: int) -> None:\n        self.minimum = minimum\n        self.maximum = maximum\n\n    def clamp(self, value: int) -> int:\n        if value < self.minimum:\n            return self.minimum\n        if value > self.maximum:\n            return self.maximum\n        return value\n\n\nclass PortParser:\n    def parse(self, value: str | None) -> int:\n        if value is None:\n            return DEFAULT_PORT\n        return int(value)\n\n\nclass PortResolver:\n    def __init__(self, parser: PortParser, bounds: PortBounds) -> None:\n        self.parser = parser\n        self.bounds = bounds\n\n    def resolve(self, value: str | None) -> int:\n        parsed = self.parser.parse(value)\n        return self.bounds.clamp(parsed)\n\n\n_resolver = PortResolver(PortParser(), PortBounds(MINIMUM_PORT, MAXIMUM_PORT))\n\n\ndef resolve_port(value: str | None) -> int:\n    return _resolver.resolve(value)\n",
+  "ponytail_implementation": "def resolve_port(value: str | None) -> int:\n    port = 8080 if value is None else int(value)\n    return min(65_535, max(1, port))\n",
+  "contract_cases": [
+    [null, 8080],
+    ["0", 1],
+    ["1", 1],
+    ["8081", 8081],
+    ["65535", 65535],
+    ["70000", 65535],
+    ["-9", 1]
+  ],
+  "invalid_cases": ["abc", "8.5", ""]
+}

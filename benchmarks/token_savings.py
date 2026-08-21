@@ -41,6 +41,7 @@ def load_ponytail_context(repo_root: Path) -> str:
     hook = plugin / "hooks" / "ponytail-activate.js"
     environment = os.environ.copy()
     environment["CLAUDE_PLUGIN_ROOT"] = str(plugin)
+    environment["PONYTAIL_DEFAULT_MODE"] = "full"
     with tempfile.TemporaryDirectory() as temporary:
         environment["PLUGIN_DATA"] = temporary
         try:
@@ -128,15 +129,25 @@ def print_combined_benchmark(encoder, data_path: Path) -> None:
     skill_tokens = count(encoder, skill_text)
     session_tokens = count(encoder, transcript["runtime"]["session_context"])
     ponytail_context = load_ponytail_context(repo_root)
-    ponytail_tokens = count(encoder, ponytail_context)
-    fixed_tokens = skill_tokens + session_tokens + ponytail_tokens
+    ponytail_skill_text = (
+        repo_root / "plugins" / "ponytail" / "skills" / "ponytail" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    ponytail_skill_tokens = count(encoder, ponytail_skill_text)
+    ponytail_context_tokens = count(encoder, ponytail_context)
+    fixed_tokens = (
+        skill_tokens
+        + session_tokens
+        + ponytail_skill_tokens
+        + ponytail_context_tokens
+    )
     print(
         f"activation context: skill {skill_tokens} + SessionStart {session_tokens} "
-        f"+ Ponytail SessionStart {ponytail_tokens} "
+        f"+ Ponytail skill {ponytail_skill_tokens} "
+        f"+ Ponytail SessionStart {ponytail_context_tokens} "
         f"= {fixed_tokens} tokens"
     )
     print("repeated fixture including both plugins' activation context")
-    for operations in (1, 2, 5):
+    for operations in (1, 2, 5, 10):
         activated_before = before_total * operations
         activated_after = fixed_tokens + after_total * operations
         activated_saved = activated_before - activated_after
