@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -86,6 +87,39 @@ class PersistentDefaultsContractTests(unittest.TestCase):
         self.assertTrue(manifest["version"].startswith("0.2.0"))
         forbidden_name = "pix" + "-optimizer"
         self.assertNotIn(forbidden_name, repository_text.lower())
+
+    def test_public_files_do_not_contain_machine_specific_home_paths(self) -> None:
+        public_text_files = (
+            path
+            for path in ROOT.rglob("*")
+            if path.is_file()
+            and ".git" not in path.parts
+            and "__pycache__" not in path.parts
+            and ".venv" not in path.parts
+            and (
+                path.suffix in {".json", ".md", ".py", ".sh", ".toml"}
+                or path.name == "LICENSE"
+            )
+        )
+        unix_home = re.compile(
+            re.escape(str(Path("/", "home"))) + r"/[A-Za-z0-9._-]+"
+            + "|"
+            + re.escape(str(Path("/", "Users"))) + r"/[A-Za-z0-9._-]+"
+            + "|"
+            + re.escape(str(Path("/", "root"))) + r"(?:/|\b)"
+        )
+        windows_home = re.compile(
+            r"[A-Za-z]:" + re.escape("\\Users\\") + r"[^\\\s]+",
+            re.IGNORECASE,
+        )
+
+        violations = []
+        for path in public_text_files:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if unix_home.search(text) or windows_home.search(text):
+                violations.append(str(path.relative_to(ROOT)))
+
+        self.assertEqual(violations, [], f"machine-specific paths found in: {violations}")
 
 
 if __name__ == "__main__":

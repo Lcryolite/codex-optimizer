@@ -240,9 +240,10 @@ python3 -m venv .venv
 ## 开发校验
 
 ```bash
-python3 /home/lknife/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py \
+CODEX_SYSTEM_SKILLS="${CODEX_HOME:-$HOME/.codex}/skills/.system"
+python3 "$CODEX_SYSTEM_SKILLS/plugin-creator/scripts/validate_plugin.py" \
   plugins/codex-optimizer
-python3 /home/lknife/.codex/skills/.system/skill-creator/scripts/quick_validate.py \
+python3 "$CODEX_SYSTEM_SKILLS/skill-creator/scripts/quick_validate.py" \
   plugins/codex-optimizer/skills/codex-optimizer
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 .venv/bin/python benchmarks/token_savings.py --verify-runtime
