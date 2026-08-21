@@ -47,7 +47,7 @@ All modes are enabled by default:
 
 | Mode | Default | Effect |
 | --- | --- | --- |
-| Caveman | `full` | Removes response filler while preserving code, exact errors, safety constraints, and requested formats. |
+| Caveman | `full` | Removes filler, hedging, repetition, and pleasantries while preserving all technical content; temporarily favors clarity for safety and irreversible actions. |
 | Ponytail | `full` | Chooses the smallest correct implementation; prefers standard library, platform features, and existing dependencies. |
 | RTK | `on` | Uses a silent `PreToolUse` rewrite and token-neutral `PostToolUse` analysis. |
 
@@ -232,9 +232,9 @@ Fixed activation context is also measured, rather than hidden:
 
 | Activation component | Tokens |
 | --- | ---: |
-| Default `SKILL.md` | 323 |
+| Default `SKILL.md` | 472 |
 | SessionStart mode state | 20 |
-| **Total fixed context** | **343** |
+| **Total fixed context** | **492** |
 
 The optional 247-token mode-settings reference is loaded only when the user
 asks to change, explain, save, or reset a mode. Repeating the same synthetic
@@ -242,9 +242,9 @@ operation after one activation gives:
 
 | Operations | Before | After including fixed context | Saved |
 | ---: | ---: | ---: | ---: |
-| 1 | 409 | 392 | 17 (4.2%) |
-| 2 | 818 | 441 | 377 (46.1%) |
-| 5 | 2,045 | 588 | 1,457 (71.2%) |
+| 1 | 409 | 541 | -132 (-32.3%) |
+| 2 | 818 | 590 | 228 (27.9%) |
+| 5 | 2,045 | 737 | 1,308 (64.0%) |
 
 This is transcript/context accounting, not a billing promise; provider prompt
 caching and the number of model continuations affect billed input separately.

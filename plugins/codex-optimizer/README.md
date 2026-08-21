@@ -5,7 +5,8 @@
 
 Hook-backed Codex plugin with three automatic modes:
 
-- Caveman `full`: concise, technically complete responses.
+- Caveman `full`: terse responses with exact technical content and clarity
+  exceptions for safety or irreversible actions.
 - Ponytail `full`: smallest correct implementation.
 - RTK `on`: silent `PreToolUse` command rewriting plus token-neutral
   `PostToolUse` stage analysis.

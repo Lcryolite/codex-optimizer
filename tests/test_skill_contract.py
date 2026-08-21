@@ -25,6 +25,31 @@ HOOK = PLUGIN / "hooks" / "codex_optimizer_hook.py"
 
 
 class PersistentDefaultsContractTests(unittest.TestCase):
+    def test_every_caveman_level_reaches_session_context(self) -> None:
+        for level in ("off", "lite", "full", "ultra", "micro"):
+            with self.subTest(level=level), tempfile.TemporaryDirectory() as temporary:
+                environment = os.environ.copy()
+                environment["HOME"] = temporary
+                environment["PLUGIN_ROOT"] = str(PLUGIN)
+                subprocess.run(
+                    [sys.executable, str(CONFIG), "set", "caveman", level],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    env=environment,
+                )
+                result = subprocess.run(
+                    [sys.executable, str(HOOK), "session-start"],
+                    input="{}",
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    env=environment,
+                )
+
+            context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
+            self.assertIn(f"caveman={level}", context)
+
     def test_session_start_loads_saved_defaults(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             environment = os.environ.copy()
