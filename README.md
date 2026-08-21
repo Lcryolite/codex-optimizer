@@ -2,7 +2,8 @@
 
 A hook-backed Codex plugin that silently rewrites supported shell commands
 through RTK, analyzes compaction candidates without injecting duplicate model
-context, keeps responses concise, and avoids unnecessary implementation scope.
+context, and keeps responses concise. This repository also distributes the
+upstream Ponytail plugin as a pinned Git submodule.
 
 [中文文档 / Chinese documentation](docs/README.zh-CN.md)
 
@@ -27,7 +28,7 @@ candidates locally without emitting hook output:
 rtk git status
 ```
 
-At session start the model receives only the three effective mode values; the
+At session start the model receives only the two effective mode values; the
 ten-stage list is not repeated into every conversation. Unsupported commands
 and outputs that do not produce a smaller candidate remain silent.
 
@@ -42,13 +43,17 @@ See the official
 
 ## Modes
 
-All modes are enabled by default:
+Codex Optimizer enables these modes by default:
 
 | Mode | Default | Effect |
 | --- | --- | --- |
 | Caveman | `full` | Removes filler, hedging, repetition, and pleasantries while preserving all technical content; temporarily favors clarity for safety and irreversible actions. |
-| Ponytail | `full` | Chooses the smallest correct implementation; prefers standard library, platform features, and existing dependencies. |
 | RTK | `on` | Uses a silent `PreToolUse` rewrite and token-neutral `PostToolUse` analysis. |
+
+Ponytail is the unmodified upstream plugin, not a partial mode reimplemented
+inside Codex Optimizer. Installing it from this marketplace provides its
+complete skills and lifecycle hooks. Its configuration and releases remain
+independent.
 
 ## Output stages
 
@@ -75,18 +80,36 @@ explicit offset/limit reads remain exact, skill files remain exact, and
 recognizable `sudo`, publish, remote-write, and destructive commands never
 reach RTK or receive automatic `permissionDecision: allow`.
 
-## Install
-
-Requirements: Codex CLI and an `rtk` binary in `PATH`.
+For an exact, unfiltered, or machine-readable Bash operation, bypass RTK once
+with a normal shell environment prefix:
 
 ```bash
-git clone https://github.com/Lcryolite/codex-optimizer.git
+CODEX_OPTIMIZER_RAW=1 rg --json needle src
+```
+
+The hook emits no rewrite for that operation. The prefix remains part of the
+executed shell command and does not change the persistent RTK setting.
+
+## Install
+
+Requirements: Codex CLI plus `rtk` and `node` binaries in `PATH`. Codex
+Optimizer uses RTK; the upstream Ponytail lifecycle hooks use Node.js.
+
+```bash
+git clone --recurse-submodules https://github.com/Lcryolite/codex-optimizer.git
 cd codex-optimizer
 codex plugin marketplace add .
 codex plugin add codex-optimizer@codex-optimizer
+codex plugin add ponytail@codex-optimizer
 ```
 
-Start a new Codex session, open `/hooks`, inspect the three plugin hooks, and
+For an existing checkout, initialize the submodule first:
+
+```bash
+git submodule update --init --recursive
+```
+
+Start a new Codex session, open `/hooks`, inspect both plugins' hooks, and
 trust them. Codex requires this trust step because hooks execute local code.
 The hook launcher resolves the newest valid installed cache at execution time,
 so reinstalling an update does not leave already-running sessions pointing at
@@ -97,6 +120,21 @@ audited environment.
 
 Then ask for normal coding work—no trigger phrase is needed. An explicit
 `$codex-optimizer` can still force the skill outside its automatic scope.
+
+## Updating Ponytail
+
+The repository pins Ponytail to a reviewed upstream commit. To update that
+pin, fetch the latest configured upstream branch, validate both plugins, and
+commit the resulting gitlink change:
+
+```bash
+git submodule update --remote plugins/ponytail
+git diff --submodule=log -- plugins/ponytail
+git add plugins/ponytail
+```
+
+No Ponytail source is copied into Codex Optimizer, so upstream updates stay
+auditable and reversible through normal Git history.
 
 ## Verify activation and savings
 
@@ -224,19 +262,22 @@ Fixed activation context is also measured, rather than hidden:
 
 | Activation component | Tokens |
 | --- | ---: |
-| Default `SKILL.md` | 475 |
-| SessionStart mode state | 20 |
-| **Total fixed context** | **495** |
+| Codex Optimizer `SKILL.md` | 399 |
+| Codex Optimizer SessionStart state | 15 |
+| Upstream Ponytail `full` SessionStart rules | 1,264 |
+| **Both installed plugins** | **1,678** |
 
-The optional 247-token mode-settings reference is loaded only when the user
-asks to change, explain, save, or reset a mode. Repeating the same synthetic
-operation after one activation gives:
+The optional 218-token mode-settings reference is loaded only when the user
+asks to change, explain, save, or reset a Codex Optimizer mode. The Ponytail
+row is measured by executing the pinned upstream hook with `PLUGIN_DATA`, so
+Codex-specific output excludes its Claude-only statusline nudge. Repeating the
+same synthetic operation after both plugins activate gives:
 
 | Operations | Before | After including fixed context | Saved |
 | ---: | ---: | ---: | ---: |
-| 1 | 409 | 544 | -135 (-33.0%) |
-| 2 | 818 | 593 | 225 (27.5%) |
-| 5 | 2,045 | 740 | 1,305 (63.8%) |
+| 1 | 409 | 1,727 | -1,318 (-322.2%) |
+| 2 | 818 | 1,776 | -958 (-117.1%) |
+| 5 | 2,045 | 1,923 | 122 (6.0%) |
 
 This is transcript/context accounting, not a billing promise; provider prompt
 caching and the number of model continuations affect billed input separately.
@@ -270,4 +311,6 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 ## License and attribution
 
 MIT. See [LICENSE](plugins/codex-optimizer/LICENSE) and
-[NOTICE](plugins/codex-optimizer/NOTICE.md).
+[NOTICE](plugins/codex-optimizer/NOTICE.md). Ponytail is distributed as an
+independent MIT-licensed submodule; see its
+[license](plugins/ponytail/LICENSE).

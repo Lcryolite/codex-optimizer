@@ -3,13 +3,16 @@
 [Full English documentation](../../README.md) ·
 [中文文档](../../docs/README.zh-CN.md)
 
-Hook-backed Codex plugin with three automatic modes:
+Hook-backed Codex plugin with two automatic modes:
 
 - Caveman `full`: terse responses with exact technical content and clarity
   exceptions for safety or irreversible actions.
-- Ponytail `full`: smallest correct implementation.
 - RTK `on`: silent `PreToolUse` command rewriting plus token-neutral
   and silent `PostToolUse` stage analysis.
+
+The repository marketplace also includes the upstream Ponytail plugin as an
+independent Git submodule. Its own hooks and complete rule set remain under
+upstream ownership and can be updated by moving the pinned submodule commit.
 
 ## Install
 
@@ -18,6 +21,7 @@ From the repository root:
 ```bash
 codex plugin marketplace add .
 codex plugin add codex-optimizer@codex-optimizer
+codex plugin add ponytail@codex-optimizer
 ```
 
 Start a new session, use `/hooks` to inspect and trust the plugin hooks, then

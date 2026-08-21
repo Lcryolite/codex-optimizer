@@ -22,9 +22,38 @@ SKILL = (
 )
 CONFIG = SKILL.parent / "scripts" / "codex_config.py"
 HOOK = PLUGIN / "hooks" / "codex_optimizer_hook.py"
+MARKETPLACE = ROOT / ".agents" / "plugins" / "marketplace.json"
+PONYTAIL = ROOT / "plugins" / "ponytail"
 
 
 class PersistentDefaultsContractTests(unittest.TestCase):
+    def test_marketplace_exposes_complete_upstream_ponytail_plugin(self) -> None:
+        marketplace = json.loads(MARKETPLACE.read_text(encoding="utf-8"))
+        entries = {entry["name"]: entry for entry in marketplace["plugins"]}
+        ponytail_manifest = json.loads(
+            (PONYTAIL / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(
+            entries["ponytail"]["source"],
+            {"source": "local", "path": "./plugins/ponytail"},
+        )
+        self.assertEqual(ponytail_manifest["name"], "ponytail")
+        self.assertEqual(ponytail_manifest["skills"], "./skills/")
+        self.assertEqual(ponytail_manifest["hooks"], "./hooks/claude-codex-hooks.json")
+        self.assertTrue((PONYTAIL / "skills" / "ponytail" / "SKILL.md").is_file())
+        self.assertTrue((PONYTAIL / "skills" / "ponytail-review" / "SKILL.md").is_file())
+        self.assertTrue((PONYTAIL / "hooks" / "ponytail-activate.js").is_file())
+
+    def test_codex_optimizer_does_not_shadow_upstream_ponytail_rules(self) -> None:
+        own_skill = SKILL.read_text(encoding="utf-8")
+        own_modes = (SKILL.parent / "references" / "mode-settings.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn("Ponytail", own_skill)
+        self.assertNotIn("Ponytail", own_modes)
+
     def test_every_caveman_level_reaches_session_context(self) -> None:
         for level in ("off", "lite", "full", "ultra", "micro"):
             with self.subTest(level=level), tempfile.TemporaryDirectory() as temporary:

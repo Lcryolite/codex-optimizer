@@ -3,8 +3,8 @@
 [English README](../README.md)
 
 Codex Optimizer 是一个基于真实 Codex hooks 的自动优化插件：由 RTK 静默改写受支持的
-shell 命令，在不注入重复模型上下文的前提下分析压缩候选，减少回复冗余，并限制不必要的
-实现范围。
+shell 命令，在不注入重复模型上下文的前提下分析压缩候选，并减少回复冗余。本仓库还通过
+Git submodule 固定并发布完整的上游 Ponytail 插件。
 
 ## “自动”是运行时自动
 
@@ -25,7 +25,7 @@ PreToolUse 不再输出 hook 消息或模型上下文，正常的命令执行行
 rtk git status
 ```
 
-会话启动时只向模型注入三个有效模式值，不再重复十个阶段名称。不支持的命令或不能产生
+会话启动时只向模型注入两个有效模式值，不再重复十个阶段名称。不支持的命令或不能产生
 更小候选的输出保持静默。
 
 Codex 目前没有“静默替换任意 PostToolUse 结果”的受支持字段。返回
@@ -39,8 +39,10 @@ RTK 在 Bash 输出进入 Codex 前完成真实缩减；PostToolUse 保留原始
 | 模式 | 默认值 | 作用 |
 | --- | --- | --- |
 | Caveman | `full` | 删除客套、模糊措辞、重复和填充语，保留全部技术内容；安全与不可逆操作临时优先清晰表达。 |
-| Ponytail | `full` | 选择最小正确实现，优先标准库、平台功能和已有依赖。 |
 | RTK | `on` | 通过静默 `PreToolUse` 改写和零模型上下文的 `PostToolUse` 分析运行。 |
+
+Ponytail 不再作为 Codex Optimizer 内部的不完整模式存在。本 marketplace 发布未经复制的
+上游插件，因此会安装其完整 skill 与生命周期 hooks；配置和版本也由上游独立维护。
 
 ## 全部输出阶段
 
@@ -64,24 +66,53 @@ RTK 在 Bash 输出进入 Codex 前完成真实缩减；PostToolUse 保留原始
 文件保持原样；任何可识别的 `sudo`、发布、远程写入和破坏性命令都不会交给 RTK，也不会
 获得自动 `permissionDecision: allow`。
 
-## 安装
-
-需要 Codex CLI，并确保 `rtk` 在 `PATH` 中：
+某次 Bash 操作需要精确、未过滤或机器可读输出时，可只绕过这一次 RTK：
 
 ```bash
-git clone https://github.com/Lcryolite/codex-optimizer.git
+CODEX_OPTIMIZER_RAW=1 rg --json needle src
+```
+
+hook 不会改写该操作；此前缀保留在实际 shell 命令中，不会修改持久化 RTK 设置。
+
+## 安装
+
+需要 Codex CLI，并确保 `rtk` 和 `node` 都在 `PATH` 中。Codex Optimizer 使用 RTK，
+上游 Ponytail 生命周期 hooks 使用 Node.js：
+
+```bash
+git clone --recurse-submodules https://github.com/Lcryolite/codex-optimizer.git
 cd codex-optimizer
 codex plugin marketplace add .
 codex plugin add codex-optimizer@codex-optimizer
+codex plugin add ponytail@codex-optimizer
 ```
 
-新开 Codex 会话，执行 `/hooks`，检查并信任三个插件 hook。Codex 要求这一步，是因为 hook
+已有 checkout 先初始化子模块：
+
+```bash
+git submodule update --init --recursive
+```
+
+新开 Codex 会话，执行 `/hooks`，检查并信任两个插件的 hooks。Codex 要求这一步，是因为 hook
 会运行本地代码。hook 启动器会在执行时解析最新的有效安装缓存，因此重新安装更新后，已在
 运行的会话不会继续指向被删除的旧版本目录。`--dangerously-bypass-hook-trust` 仅适用于已
 经隔离并审计过的单次自动化环境。
 
 之后直接提出正常编码任务即可，不需要触发词。`$codex-optimizer` 仍可用于自动范围之外的
 任务。
+
+## 更新 Ponytail
+
+仓库固定到一个经过审查的上游 commit。更新时只移动 submodule gitlink：
+
+```bash
+git submodule update --remote plugins/ponytail
+git diff --submodule=log -- plugins/ponytail
+git add plugins/ponytail
+```
+
+随后验证两个插件并提交。Ponytail 源码没有复制进 Codex Optimizer，因此更新可通过普通
+Git 历史审计和回退。
 
 ## 检查是否启动及实际节省
 
@@ -201,18 +232,20 @@ Tests pass: 20/20 in 1 suite; 0 failures.
 
 | 激活组成 | Tokens |
 | --- | ---: |
-| 默认 `SKILL.md` | 475 |
-| SessionStart 模式状态 | 20 |
-| **固定上下文总计** | **495** |
+| Codex Optimizer `SKILL.md` | 399 |
+| Codex Optimizer SessionStart 状态 | 15 |
+| 上游 Ponytail `full` SessionStart 规则 | 1,264 |
+| **两个已安装插件合计** | **1,678** |
 
-247-token 的可选模式设置 reference 仅在用户要求修改、解释、保存或重置模式时加载。同一
-fixture 在一次激活后重复执行时：
+218-token 的可选模式设置 reference 仅在用户要求修改、解释、保存或重置 Codex Optimizer
+模式时加载。Ponytail 一行通过带 `PLUGIN_DATA` 实际执行固定版本的上游 hook 得出，因此
+Codex 输出不含仅面向 Claude 的 statusline 提示。两个插件激活后重复执行同一 fixture：
 
 | 操作次数 | 压缩前 | 含固定上下文的压缩后 | 节省 |
 | ---: | ---: | ---: | ---: |
-| 1 | 409 | 544 | -135（-33.0%） |
-| 2 | 818 | 593 | 225（27.5%） |
-| 5 | 2,045 | 740 | 1,305（63.8%） |
+| 1 | 409 | 1,727 | -1,318（-322.2%） |
+| 2 | 818 | 1,776 | -958（-117.1%） |
+| 5 | 2,045 | 1,923 | 122（6.0%） |
 
 这是 transcript/上下文核算，不是账单承诺；provider prompt caching 和模型 continuation
 次数会另外影响实际计费输入。
@@ -245,4 +278,5 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 ## 许可证与致谢
 
 MIT，详见 [LICENSE](../plugins/codex-optimizer/LICENSE) 和
-[NOTICE](../plugins/codex-optimizer/NOTICE.md)。
+[NOTICE](../plugins/codex-optimizer/NOTICE.md)。Ponytail 作为独立 MIT 子模块发布，详见其
+[许可证](../plugins/ponytail/LICENSE)。

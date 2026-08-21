@@ -23,6 +23,10 @@ SENSITIVE_COMMANDS = {
     ("yarn", "publish"),
 }
 SENSITIVE_WORDS = {"rm", "shred"}
+RAW_OUTPUT_PREFIX = re.compile(
+    r"^\s*(?:env\s+)?CODEX_OPTIMIZER_RAW=(?:1|true|on)(?=\s|$)",
+    re.IGNORECASE,
+)
 
 
 def _shell_tokens(command: str) -> list[str]:
@@ -47,6 +51,12 @@ def contains_approval_sensitive_mutation(command: str) -> bool:
     return any(pair in SENSITIVE_COMMANDS for pair in zip(words, words[1:]))
 
 
+def requests_raw_output(command: str) -> bool:
+    """Recognize an operation-wide opt-out that remains a valid shell prefix."""
+
+    return RAW_OUTPUT_PREFIX.match(command) is not None
+
+
 def rewrite_with_rtk(command: str) -> str:
     executable = shutil.which("rtk")
     if executable is None:
@@ -69,7 +79,11 @@ def rewrite_with_rtk(command: str) -> str:
 
 def safe_rewrite(command: str) -> str:
     try:
-        if contains_sudo(command) or contains_approval_sensitive_mutation(command):
+        if (
+            requests_raw_output(command)
+            or contains_sudo(command)
+            or contains_approval_sensitive_mutation(command)
+        ):
             return command
     except ValueError:
         return command

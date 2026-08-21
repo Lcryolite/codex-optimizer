@@ -14,6 +14,7 @@ sys.path.insert(0, str(PLUGIN_ROOT / "lib"))
 from codex_optimizer.rewrite import (  # noqa: E402
     contains_approval_sensitive_mutation,
     contains_sudo,
+    requests_raw_output,
     rewrite_with_rtk,
 )
 
@@ -25,6 +26,9 @@ def main() -> int:
     command = args.command if args.command is not None else sys.stdin.read().rstrip("\n")
     if not command:
         parser.error("provide a command or pipe one on stdin")
+    if requests_raw_output(command):
+        print(command)
+        return 0
     try:
         blocked = contains_sudo(command)
     except ValueError:

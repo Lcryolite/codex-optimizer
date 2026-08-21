@@ -66,7 +66,7 @@ def session_start() -> dict[str, Any]:
     modes = load()
     context = (
         f"codex-optimizer: caveman={modes['caveman']}; "
-        f"ponytail={modes['ponytail']}; rtk={modes['rtk']}."
+        f"rtk={modes['rtk']}."
     )
     return {
         "systemMessage": "[codex-optimizer] active",

@@ -16,7 +16,7 @@
     "model_context_notices": ""
   },
   "runtime": {
-    "session_context": "codex-optimizer: caveman=full; ponytail=full; rtk=on.",
+    "session_context": "codex-optimizer: caveman=full; rtk=on.",
     "rtk_output": "cargo test: 20 passed (1 suite, 0.03s)\n",
     "candidate_output": "Test Results:\n  PASS: 20 passed"
   }

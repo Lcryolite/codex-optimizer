@@ -36,6 +36,32 @@ def count(encoder, text: str) -> int:
     return len(encoder.encode(text))
 
 
+def load_ponytail_context(repo_root: Path) -> str:
+    plugin = repo_root / "plugins" / "ponytail"
+    hook = plugin / "hooks" / "ponytail-activate.js"
+    environment = os.environ.copy()
+    environment["CLAUDE_PLUGIN_ROOT"] = str(plugin)
+    with tempfile.TemporaryDirectory() as temporary:
+        environment["PLUGIN_DATA"] = temporary
+        try:
+            result = subprocess.run(
+                ["node", str(hook)],
+                capture_output=True,
+                text=True,
+                check=False,
+                env=environment,
+            )
+        except FileNotFoundError as exc:
+            raise SystemExit("node is required to measure the Ponytail hook") from exc
+    if result.returncode != 0 or result.stderr or not result.stdout:
+        raise SystemExit(
+            "Ponytail SessionStart hook failed during benchmark\n"
+            f"exit={result.returncode}\nstderr={result.stderr!r}"
+        )
+    response = json.loads(result.stdout)
+    return response["hookSpecificOutput"]["additionalContext"]
+
+
 def print_response_benchmark(encoder, data_path: Path) -> None:
     cases = json.loads(data_path.read_text(encoding="utf-8"))
     totals = {level: [0, 0] for level in LEVELS}
@@ -101,12 +127,15 @@ def print_combined_benchmark(encoder, data_path: Path) -> None:
     ).read_text(encoding="utf-8")
     skill_tokens = count(encoder, skill_text)
     session_tokens = count(encoder, transcript["runtime"]["session_context"])
-    fixed_tokens = skill_tokens + session_tokens
+    ponytail_context = load_ponytail_context(repo_root)
+    ponytail_tokens = count(encoder, ponytail_context)
+    fixed_tokens = skill_tokens + session_tokens + ponytail_tokens
     print(
         f"activation context: skill {skill_tokens} + SessionStart {session_tokens} "
+        f"+ Ponytail SessionStart {ponytail_tokens} "
         f"= {fixed_tokens} tokens"
     )
-    print("repeated fixture including one activation context")
+    print("repeated fixture including both plugins' activation context")
     for operations in (1, 2, 5):
         activated_before = before_total * operations
         activated_after = fixed_tokens + after_total * operations

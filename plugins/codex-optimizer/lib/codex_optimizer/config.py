@@ -8,11 +8,10 @@ import tempfile
 from pathlib import Path
 
 
-DEFAULTS = {"caveman": "full", "rtk": "on", "ponytail": "full"}
+DEFAULTS = {"caveman": "full", "rtk": "on"}
 LEVELS = {
     "caveman": {"off", "lite", "full", "ultra", "micro"},
     "rtk": {"off", "on"},
-    "ponytail": {"off", "lite", "full", "ultra"},
 }
 
 

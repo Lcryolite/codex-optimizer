@@ -318,6 +318,19 @@ class RuntimeHookTests(unittest.TestCase):
         )
         self.assertEqual(result.stdout, "")
 
+    def test_pre_tool_use_respects_per_operation_raw_output_marker(self) -> None:
+        result = self.run_hook(
+            "pre-tool-use",
+            {
+                "tool_name": "Bash",
+                "tool_input": {
+                    "command": "CODEX_OPTIMIZER_RAW=1 git status --porcelain=v2"
+                },
+            },
+            fake_rtk=True,
+        )
+        self.assertEqual(result.stdout, "")
+
     def test_post_tool_use_records_metrics_without_hook_output(self) -> None:
         raw = "\x1b[32m" + "\n".join(f"case_{index} PASSED" for index in range(30))
         raw += "\n30 passed in 1.0s\x1b[0m"
@@ -347,7 +360,7 @@ class RuntimeHookTests(unittest.TestCase):
 
         self.assertEqual(
             context,
-            "codex-optimizer: caveman=full; ponytail=full; rtk=on.",
+            "codex-optimizer: caveman=full; rtk=on.",
         )
         self.assertEqual(response["systemMessage"], "[codex-optimizer] active")
 

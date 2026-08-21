@@ -99,6 +99,24 @@ class RtkRewriteSafetyTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0)
                 self.assertTrue(marker.exists())
 
+    def test_explicit_raw_output_marker_bypasses_rtk(self) -> None:
+        for command in (
+            "CODEX_OPTIMIZER_RAW=1 git status --porcelain=v2",
+            "env CODEX_OPTIMIZER_RAW=true rg --json needle .",
+        ):
+            with self.subTest(command=command):
+                result, marker = self.run_helper(command)
+                self.assertEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, f"{command}\n")
+                self.assertFalse(marker.exists())
+
+    def test_disabled_raw_output_marker_does_not_bypass_rtk(self) -> None:
+        result, marker = self.run_helper("CODEX_OPTIMIZER_RAW=0 git status")
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "rewritten\n")
+        self.assertTrue(marker.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
